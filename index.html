@@ -1,0 +1,1092 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>智慧請假與補休管理系統 | Leave Management System</title>
+  
+  <!-- Google Fonts: Inter & Noto Sans TC -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&family=Noto+Sans+TC:wght@400;500;600;700;900&display=swap" rel="stylesheet">
+  
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <!-- 核心樣式 -->
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <!-- ==================== 登入畫面 (Auth & Login Overlay) ==================== -->
+  <div class="login-overlay" id="loginScreen">
+    <div class="login-card">
+      <div class="login-header">
+        <div class="login-logo">
+          <i class="fa-solid fa-calendar-check"></i>
+        </div>
+        <h2>請假與補休管理系統</h2>
+        <p>請登入您的員工或主管帳號以繼續</p>
+      </div>
+
+      <!-- 登入錯誤警示條 -->
+      <div class="login-error-banner" id="loginErrorBanner">
+        <i class="fa-solid fa-circle-exclamation"></i>
+        <span id="loginErrorMsg">帳號或密碼錯誤，請重新輸入。</span>
+      </div>
+
+      <!-- 登入表單 -->
+      <form class="login-form" id="loginForm" onsubmit="App.handleLogin(event)">
+        <div class="form-group">
+          <label class="form-label">電子信箱 (Email) <span class="req-star">*</span></label>
+          <div class="input-icon-wrap">
+            <i class="fa-solid fa-envelope prefix-icon"></i>
+            <input type="email" class="form-control" id="loginEmail" placeholder="請輸入公司電子信箱 (如 employee@company.com)" required>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">登入密碼 <span class="req-star">*</span></label>
+          <div class="input-icon-wrap">
+            <i class="fa-solid fa-lock prefix-icon"></i>
+            <input type="password" class="form-control" id="loginPassword" placeholder="請輸入密碼" required>
+            <button type="button" class="toggle-password-btn" onclick="App.togglePasswordVisibility('loginPassword', this)">
+              <i class="fa-solid fa-eye-slash"></i>
+            </button>
+          </div>
+        </div>
+
+        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.8rem; color: var(--text-muted);">
+          <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+            <input type="checkbox" id="rememberMeCheckbox" checked> 保持登入狀態
+          </label>
+          <span style="color: var(--primary); cursor: pointer;" onclick="App.showToast('若忘記密碼，請洽詢人事管理員 (HR) 進行重設。', 'info')">忘記密碼？</span>
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-login" id="btnLoginSubmit">
+          <i class="fa-solid fa-right-to-bracket"></i> 登入系統
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <div class="app-container" id="appContainer">
+    
+    <!-- ==================== 側邊導航欄 (Desktop Sidebar) ==================== -->
+    <aside class="app-sidebar" id="appSidebar">
+      <div class="sidebar-header">
+        <div class="brand-logo">
+          <i class="fa-solid fa-calendar-check"></i>
+        </div>
+        <div class="brand-title">
+          <h1>請假管理系統</h1>
+          <span>Smart Leave & Comp</span>
+        </div>
+      </div>
+
+      <nav class="sidebar-nav">
+        <div class="nav-section-title">個人差勤</div>
+        <a class="nav-item active" data-view="dashboard">
+          <i class="fa-solid fa-house-chimney"></i>
+          <span>差勤儀表板</span>
+        </a>
+        <a class="nav-item" data-view="apply-leave">
+          <i class="fa-solid fa-file-circle-plus"></i>
+          <span>請假申請單</span>
+        </a>
+        <a class="nav-item" data-view="overtime">
+          <i class="fa-solid fa-business-time"></i>
+          <span>加班與補休</span>
+        </a>
+        <a class="nav-item" data-view="history">
+          <i class="fa-solid fa-clock-rotate-left"></i>
+          <span>歷史紀錄與匯出</span>
+        </a>
+        <a class="nav-item" data-view="calendar">
+          <i class="fa-solid fa-calendar-days"></i>
+          <span>差勤行事曆</span>
+        </a>
+
+        <div class="nav-section-title">管理與審核</div>
+        <a class="nav-item" data-view="approvals" id="navApprovals">
+          <i class="fa-solid fa-signature"></i>
+          <span>審核簽核中心</span>
+          <span class="nav-badge" id="pendingApprovalBadge" style="display: none;">0</span>
+        </a>
+        <a class="nav-item" data-view="settings" id="navSettings">
+          <i class="fa-solid fa-sliders"></i>
+          <span>系統設定 / Sheet</span>
+        </a>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="gas-status-box">
+          <div>
+            <span class="status-dot" id="sheetStatusDot"></span>
+            <span id="sheetStatusText" style="font-weight: 600;">本機資料庫模式</span>
+          </div>
+          <button class="btn btn-sm btn-secondary" id="sidebarSettingsBtn" onclick="App.navigate('settings')" title="設定 Google Sheet 串接">
+            <i class="fa-solid fa-gear"></i>
+          </button>
+        </div>
+      </div>
+    </aside>
+
+    <!-- ==================== 主要工作區 (Main Area) ==================== -->
+    <main class="app-main">
+      
+      <!-- 頂部 Header -->
+      <header class="app-header">
+        <div class="header-left">
+          <button class="mobile-menu-btn" id="mobileMenuBtn">
+            <i class="fa-solid fa-bars"></i>
+          </button>
+          <div class="header-page-title">
+            <h2 id="pageTitle">差勤儀表板</h2>
+            <p id="pageSubtitle">標準工時 08:30 - 18:00 (午休 12:00 - 13:30 扣 1.5h)</p>
+          </div>
+        </div>
+
+        <div class="header-right">
+          <!-- 使用者資料徽章與登出按鈕 -->
+          <div class="user-profile-badge">
+            <div class="user-avatar" id="userAvatar">王</div>
+            <div class="user-meta">
+              <span class="user-name" id="userName">王小明</span>
+              <span class="user-role-tag" id="userRoleTag">研發部 · Employee</span>
+            </div>
+          </div>
+
+          <button class="btn btn-sm btn-secondary" onclick="App.handleLogout()" title="登出系統" style="color: var(--danger);">
+            <i class="fa-solid fa-right-from-bracket"></i>
+            <span>登出</span>
+          </button>
+        </div>
+      </header>
+
+      <!-- 視圖區域 (Views Container) -->
+      <div class="view-container">
+
+        <!-- ==================== 1. 儀表板視圖 (Dashboard) ==================== -->
+        <section class="view-section active" id="view-dashboard">
+          <div class="dashboard-hero">
+            <div class="hero-welcome">
+              <h3>早安，<span id="heroUserName">王小明</span> 👋</h3>
+              <p>今日為工作日，目前年度額度狀態與近期差勤紀錄如下：</p>
+            </div>
+            <div class="quick-action-group">
+              <button class="btn btn-primary" onclick="App.navigate('apply-leave')">
+                <i class="fa-solid fa-plus"></i> 線上請假
+              </button>
+              <button class="btn btn-secondary" onclick="App.navigate('overtime')">
+                <i class="fa-solid fa-clock"></i> 申報加班
+              </button>
+            </div>
+          </div>
+
+          <!-- 主管待審核提示條 -->
+          <div id="managerAlertBanner" style="display: none; margin-bottom: 20px; background: #fffbeb; border: 1px solid #fde68a; border-radius: var(--radius-md); padding: 14px 20px; align-items: center; justify-content: space-between;">
+            <div style="display: flex; align-items: center; gap: 12px;">
+              <i class="fa-solid fa-bell" style="color: #d97706; font-size: 1.2rem;"></i>
+              <div>
+                <strong style="color: #92400e; font-size: 0.92rem;">您有待簽核的請假或加班申請單！</strong>
+                <p style="font-size: 0.8rem; color: #b45309;">請盡速前往審核中心進行簽核。</p>
+              </div>
+            </div>
+            <button class="btn btn-sm btn-primary" onclick="App.navigate('approvals')">
+              前往審核中心 (<span id="bannerPendingCount">0</span>)
+            </button>
+          </div>
+
+          <!-- 勞基法特休資格與到職日提示條 -->
+          <div id="statutoryAnnualBanner" style="margin-bottom: 20px; background: linear-gradient(135deg, #eff6ff, #f0fdf4); border: 1px solid #bfdbfe; border-radius: var(--radius-md); padding: 14px 20px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
+            <div style="display: flex; align-items: center; gap: 12px;">
+              <div style="width: 36px; height: 36px; border-radius: 50%; background: #2563eb; color: white; display: flex; align-items: center; justify-content: center; font-size: 1rem;">
+                <i class="fa-solid fa-scale-balanced"></i>
+              </div>
+              <div>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <strong style="color: #1e3a8a; font-size: 0.95rem;">勞動基準法第38條特別休假法定計算標準</strong>
+                  <span class="badge" style="background: #dbeafe; color: #1e40af; font-size: 0.75rem;" id="seniorityBadge">年資計算中</span>
+                </div>
+                <p style="font-size: 0.82rem; color: #1d4ed8; margin-top: 2px;" id="statutoryDescText">
+                  依到職日自動計算年資與法定特休額度，並即時同步至 Google Sheet 的 leave_balances 表。
+                </p>
+              </div>
+            </div>
+            <div style="display: flex; align-items: center; gap: 12px; font-size: 0.85rem;">
+              <div style="background: white; border: 1px solid #dbeafe; border-radius: var(--radius-sm); padding: 6px 12px; box-shadow: 0 1px 2px rgba(0,0,0,0.03);">
+                <span style="color: var(--text-muted);"><i class="fa-solid fa-calendar-day"></i> 到職日：</span>
+                <strong style="color: var(--text-main);" id="dashboardHireDate">2024-03-01</strong>
+              </div>
+              <div style="background: white; border: 1px solid #bbf7d0; border-radius: var(--radius-sm); padding: 6px 12px; box-shadow: 0 1px 2px rgba(0,0,0,0.03);">
+                <span style="color: var(--text-muted);"><i class="fa-solid fa-gift"></i> 法定特休：</span>
+                <strong style="color: #15803d;" id="dashboardStatutoryDays">10 天 (80h)</strong>
+              </div>
+            </div>
+          </div>
+
+          <!-- 額度卡片網格 (Balance Cards Grid) -->
+          <div class="balance-grid" id="balanceCardsGrid">
+            <!-- 動態注入各假別額度卡片 -->
+          </div>
+
+          <!-- 儀表板下半部 -->
+          <div class="dashboard-content-grid">
+            <!-- 左側：我的近期請假單 -->
+            <div class="content-panel">
+              <div class="panel-header">
+                <div class="panel-title">
+                  <i class="fa-solid fa-clock-rotate-left" style="color: var(--primary);"></i>
+                  我的差勤申請紀錄
+                </div>
+                <div style="display: flex; gap: 8px;">
+                  <button class="btn btn-sm btn-secondary" onclick="App.navigate('history')" title="前往個人差勤歷史紀錄多條件查詢與匯出">
+                    <i class="fa-solid fa-file-excel" style="color: #0f9d58;"></i> 歷史紀錄與匯出
+                  </button>
+                  <button class="btn btn-sm btn-primary" onclick="App.navigate('apply-leave')">
+                    <i class="fa-solid fa-plus"></i> 新增申請
+                  </button>
+                </div>
+              </div>
+              <div class="table-responsive">
+                <table class="custom-table">
+                  <thead>
+                    <tr>
+                      <th>單號</th>
+                      <th>假別</th>
+                      <th>請假時間區間</th>
+                      <th>時數</th>
+                      <th>狀態</th>
+                      <th>操作</th>
+                    </tr>
+                  </thead>
+                  <tbody id="myRequestsTableBody">
+                    <!-- 動態渲染 -->
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- 右側：補休存摺與行事曆速覽 -->
+            <div style="display: flex; flex-direction: column; gap: 24px;">
+              <!-- 補休存摺卡片 -->
+              <div class="content-panel">
+                <div class="panel-header">
+                  <div class="panel-title">
+                    <i class="fa-solid fa-wallet" style="color: var(--success);"></i>
+                    補休存摺摘要
+                  </div>
+                  <button class="btn btn-sm btn-secondary" onclick="App.navigate('overtime')">
+                    申報明細
+                  </button>
+                </div>
+                <div id="compWalletSummaryBox" style="font-size: 0.88rem;">
+                  <!-- 動態注入 -->
+                </div>
+              </div>
+
+              <!-- 假別規則提示 -->
+              <div class="content-panel" style="background: #f8fafc;">
+                <div class="panel-title" style="margin-bottom: 10px; font-size: 0.92rem;">
+                  <i class="fa-solid fa-circle-info" style="color: var(--secondary);"></i>
+                  考勤規範提示
+                </div>
+                <ul style="font-size: 0.8rem; color: var(--text-muted); line-height: 1.7; padding-left: 18px;">
+                  <li>每日標準上班時間：<strong>08:30 - 18:00</strong>。</li>
+                  <li>午休時間 <strong>12:00 - 13:30 (1.5h)</strong> 自動扣除。</li>
+                  <li>請假超過 <strong>3 天 (24 小時)</strong> 需經部門主管與人資雙簽。</li>
+                  <li>病假需於申請單檢附醫療證明照片或收據。</li>
+                  <li>已核准之假單若需異動，請發起「銷假申請」。</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </section>
+
+
+        <!-- ==================== 2. 請假申請單視圖 (Apply Leave) ==================== -->
+        <section class="view-section" id="view-apply-leave">
+          <div class="form-card">
+            <div style="margin-bottom: 24px;">
+              <h3 style="font-size: 1.3rem; font-weight: 800;">填寫請假申請單</h3>
+              <p style="color: var(--text-muted); font-size: 0.85rem;">系統自動依據上班時段 (08:30-18:00) 與午休 (12:00-13:30) 試算工時並扣除假日。</p>
+            </div>
+
+            <!-- 時間重疊衝突警示 -->
+            <div class="overlap-alert-box" id="overlapAlertBox">
+              <i class="fa-solid fa-triangle-exclamation"></i>
+              <span id="overlapAlertMsg">申請時間與現有單據重疊！</span>
+            </div>
+
+            <form id="leaveApplicationForm" onsubmit="App.handleLeaveSubmit(event)">
+              <div class="form-grid">
+                
+                <!-- 申請人與假別選擇 -->
+                <div class="form-group">
+                  <label class="form-label">
+                    假別選擇 <span class="req-star">*</span>
+                  </label>
+                  <select class="form-control" id="formLeaveType" required onchange="App.onFormChange()">
+                    <!-- 動態載入假別 -->
+                  </select>
+                  <span class="form-help-text" id="formLeaveTypeDesc">法定特休假</span>
+                </div>
+
+                <!-- 剩餘額度檢視 -->
+                <div class="form-group">
+                  <label class="form-label">目前可用餘額</label>
+                  <div style="padding: 10px 14px; background: #f1f5f9; border-radius: var(--radius-md); font-weight: 700; color: var(--primary); font-family: 'JetBrains Mono', monospace;" id="formAvailableBalance">
+                    -- 小時
+                  </div>
+                  <span class="form-help-text">總額度 - 已使用 - 審核中鎖定</span>
+                </div>
+
+                <!-- 快捷時段選取 -->
+                <div class="form-group form-full">
+                  <label class="form-label">常用快捷時段填入</label>
+                  <div class="preset-chips-wrap">
+                    <button type="button" class="preset-chip active" onclick="App.applyPresetTime('full')">
+                      <i class="fa-solid fa-sun"></i> 今日全天 (08:30 - 18:00, 8h)
+                    </button>
+                    <button type="button" class="preset-chip" onclick="App.applyPresetTime('morning')">
+                      <i class="fa-solid fa-mug-saucer"></i> 今日上午 (08:30 - 12:00, 3.5h)
+                    </button>
+                    <button type="button" class="preset-chip" onclick="App.applyPresetTime('afternoon')">
+                      <i class="fa-solid fa-cloud-sun"></i> 今日下午 (13:30 - 18:00, 4.5h)
+                    </button>
+                    <button type="button" class="preset-chip" onclick="App.applyPresetTime('tomorrow')">
+                      <i class="fa-solid fa-calendar-plus"></i> 明日全天 (08:30 - 18:00, 8h)
+                    </button>
+                    <button type="button" class="preset-chip" onclick="App.applyPresetTime('multidays')">
+                      <i class="fa-solid fa-plane"></i> 連請 4 天 (測試雙簽流程)
+                    </button>
+                  </div>
+                </div>
+
+                <!-- 請假起始時間 -->
+                <div class="form-group">
+                  <label class="form-label">
+                    請假起始時間 <span class="req-star">*</span>
+                  </label>
+                  <input type="datetime-local" class="form-control" id="formStartTime" required onchange="App.onFormChange()">
+                  <span class="form-help-text">標準上班 08:30</span>
+                </div>
+
+                <!-- 請假結束時間 -->
+                <div class="form-group">
+                  <label class="form-label">
+                    請假結束時間 <span class="req-star">*</span>
+                  </label>
+                  <input type="datetime-local" class="form-control" id="formEndTime" required onchange="App.onFormChange()">
+                  <span class="form-help-text">標準下班 18:00</span>
+                </div>
+
+                <!-- 即時工時計算與審核鏈預覽面板 -->
+                <div class="form-group form-full">
+                  <div class="calc-preview-card">
+                    <div class="calc-stat-row">
+                      <div>
+                        <span style="font-weight: 600; color: var(--text-main);">計算實際扣除工時：</span>
+                        <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 2px;">
+                          已排除午休 (12:00~13:30)、週六週日及國定假日
+                        </div>
+                      </div>
+                      <div class="calc-hours-highlight">
+                        <span id="previewCalculatedHours">0.0</span> <span style="font-size: 0.9rem; font-weight: 500;">小時</span>
+                      </div>
+                    </div>
+
+                    <div class="calc-stat-row" style="border-top: 1px dashed var(--border-color); padding-top: 10px; font-size: 0.85rem;">
+                      <span>送出後預估剩餘額度：</span>
+                      <strong id="previewPostRemaining" style="font-family: 'JetBrains Mono', monospace;">-- 小時</strong>
+                    </div>
+
+                    <!-- 審核路徑視覺化 -->
+                    <div class="calc-route-box">
+                      <div style="font-weight: 700; color: var(--text-main);" id="routeSummaryText">
+                        審核路徑：直屬主管簽核
+                      </div>
+                      <div class="route-steps-stepper" id="routeStepsStepper">
+                        <!-- 動態注入步驟 -->
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- 證明附件網址 -->
+                <div class="form-group form-full" id="attachmentGroup">
+                  <label class="form-label">
+                    <span>證明文件連結 / 圖片 URL</span>
+                    <span id="attachmentReqBadge" style="display: none; color: var(--danger); font-size: 0.75rem; font-weight: 600;">(此假別必填)</span>
+                  </label>
+                  <input type="url" class="form-control" id="formAttachment" placeholder="請貼上醫療收據照片連結或證明檔案 URL">
+                  <span class="form-help-text">病假、婚假、喪假依規定需檢附證明。</span>
+                </div>
+
+                <!-- 請假事由 -->
+                <div class="form-group form-full">
+                  <label class="form-label">請假事由說明 <span class="req-star">*</span></label>
+                  <textarea class="form-control" id="formReason" rows="3" required placeholder="請詳細敘述請假原因與工作代理事項..."></textarea>
+                </div>
+
+              </div>
+
+              <!-- 表單按鈕 -->
+              <div style="margin-top: 24px; display: flex; justify-content: flex-end; gap: 12px;">
+                <button type="button" class="btn btn-secondary" onclick="App.navigate('dashboard')">
+                  取消返回
+                </button>
+                <button type="submit" class="btn btn-primary" id="btnSubmitLeave">
+                  <i class="fa-solid fa-paper-plane"></i> 確認送出請假申請
+                </button>
+              </div>
+            </form>
+          </div>
+        </section>
+
+
+        <!-- ==================== 3. 加班申報與補休視圖 (Overtime & Comp-Time) ==================== -->
+        <section class="view-section" id="view-overtime">
+          <div class="dashboard-hero">
+            <div class="hero-welcome">
+              <h3>加班申報與補休存摺</h3>
+              <p>加班申報經主管核准後，自動依倍率轉換補休額度並存入個人存摺。</p>
+            </div>
+            <button class="btn btn-primary" onclick="App.showOvertimeModal()">
+              <i class="fa-solid fa-plus"></i> 填寫加班申報單
+            </button>
+          </div>
+
+          <!-- 補休存摺總覽卡片 -->
+          <div class="balance-grid" style="grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));">
+            <div class="balance-card">
+              <div class="balance-card-header">
+                <span class="balance-card-title">
+                  <i class="fa-solid fa-piggy-bank" style="color: var(--success);"></i>
+                  目前可用補休總額度
+                </span>
+                <span class="badge badge-emerald">可請假扣抵</span>
+              </div>
+              <div class="balance-ring-wrap">
+                <div class="balance-nums">
+                  <span class="balance-rem-big" id="otCompRemainingHours">0.0</span>
+                  <span class="balance-rem-label">可用補休 (小時)</span>
+                </div>
+              </div>
+              <div class="balance-card-breakdown">
+                <div class="breakdown-item">總累積: <strong id="otCompTotalHours">0.0</strong> h</div>
+                <div class="breakdown-item">已使用: <strong id="otCompUsedHours">0.0</strong> h</div>
+                <div class="breakdown-item">鎖定中: <strong id="otCompPendingHours">0.0</strong> h</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 加班申報紀錄清單 -->
+          <div class="content-panel" style="margin-top: 20px;">
+            <div class="panel-header">
+              <div class="panel-title">
+                <i class="fa-solid fa-list-check" style="color: var(--primary);"></i>
+                我的加班申報歷程
+              </div>
+            </div>
+            <div class="table-responsive">
+              <table class="custom-table">
+                <thead>
+                  <tr>
+                    <th>單號</th>
+                    <th>加班日期</th>
+                    <th>起訖時段</th>
+                    <th>申報工時</th>
+                    <th>換算補休</th>
+                    <th>加班事由</th>
+                    <th>補休效期</th>
+                    <th>狀態</th>
+                  </tr>
+                </thead>
+                <tbody id="myOvertimeTableBody">
+                  <!-- 動態載入 -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+
+        <!-- ==================== 4. 審核簽核中心 (Approval Center) ==================== -->
+        <section class="view-section" id="view-approvals">
+          <div class="dashboard-hero">
+            <div class="hero-welcome">
+              <h3>審核簽核中心</h3>
+              <p>主管與人事專用簽核入口，支援請假單、銷假單與加班換補休之審核。</p>
+            </div>
+          </div>
+
+          <!-- 審核分頁選單 -->
+          <div class="approval-tabs">
+            <button class="tab-btn active" onclick="App.switchApprovalTab('leaves', this)">
+              待審請假單 (<span id="countPendingLeaves">0</span>)
+            </button>
+            <button class="tab-btn" onclick="App.switchApprovalTab('cancels', this)">
+              待審銷假單 (<span id="countPendingCancels">0</span>)
+            </button>
+            <button class="tab-btn" onclick="App.switchApprovalTab('overtimes', this)">
+              待審加班單 (<span id="countPendingOvertimes">0</span>)
+            </button>
+            <button class="tab-btn" onclick="App.switchApprovalTab('history', this)">
+              簽核歷史歷程
+            </button>
+          </div>
+
+          <!-- 待審列表容器 -->
+          <div class="content-panel">
+            <div class="table-responsive">
+              <table class="custom-table">
+                <thead id="approvalTableHead">
+                  <!-- 動態表頭 -->
+                </thead>
+                <tbody id="approvalTableBody">
+                  <!-- 動態內容 -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+
+        <!-- ==================== 5. 差勤行事曆視圖 (Calendar View) ==================== -->
+        <section class="view-section" id="view-calendar">
+          <div class="calendar-wrapper">
+            <div class="calendar-header">
+              <div class="calendar-month-title" id="calendarMonthTitle">2026 年 9 月</div>
+              <div style="display: flex; gap: 8px;">
+                <button class="btn btn-sm btn-secondary" onclick="App.changeCalendarMonth(-1)">
+                  <i class="fa-solid fa-chevron-left"></i> 上個月
+                </button>
+                <button class="btn btn-sm btn-secondary" onclick="App.resetCalendarToday()">
+                  今天
+                </button>
+                <button class="btn btn-sm btn-secondary" onclick="App.changeCalendarMonth(1)">
+                  下個月 <i class="fa-solid fa-chevron-right"></i>
+                </button>
+              </div>
+            </div>
+
+            <!-- 星期列 -->
+            <div class="calendar-grid" style="margin-bottom: 6px;">
+              <div class="calendar-day-head" style="color: var(--danger);">週日</div>
+              <div class="calendar-day-head">週一</div>
+              <div class="calendar-day-head">週二</div>
+              <div class="calendar-day-head">週三</div>
+              <div class="calendar-day-head">週四</div>
+              <div class="calendar-day-head">週五</div>
+              <div class="calendar-day-head" style="color: var(--danger);">週六</div>
+            </div>
+
+            <!-- 月曆格子容器 -->
+            <div class="calendar-grid" id="calendarDaysGrid">
+              <!-- 動態生成日曆格 -->
+            </div>
+          </div>
+        </section>
+
+
+        <!-- ==================== 5. 個人差勤歷史紀錄與匯出 ==================== -->
+        <section class="view-section" id="view-history">
+          <div style="display: flex; flex-direction: column; gap: 20px; max-width: 1100px; margin: 0 auto;">
+            
+            <!-- 歷史紀錄查詢篩選卡片 -->
+            <div class="form-card" style="max-width: 100%;">
+              <div class="panel-header">
+                <div class="panel-title">
+                  <i class="fa-solid fa-clock-rotate-left" style="color: var(--primary);"></i>
+                  個人請假歷史紀錄多條件查詢與匯出
+                </div>
+                <button class="btn btn-sm btn-primary" onclick="App.exportHistoryCsv()">
+                  <i class="fa-solid fa-file-arrow-down"></i> 匯出 CSV 報表 (支援 Excel)
+                </button>
+              </div>
+
+              <!-- 篩選表單區 -->
+              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px; margin-top: 12px;">
+                <div class="form-group">
+                  <label class="form-label"><i class="fa-solid fa-filter"></i> 假別篩選</label>
+                  <select class="form-control" id="historyFilterLeaveType" onchange="App.applyHistoryFilter()">
+                    <option value="ALL">全部假別 (All Types)</option>
+                  </select>
+                </div>
+
+                <div class="form-group">
+                  <label class="form-label"><i class="fa-solid fa-traffic-light"></i> 審核狀態</label>
+                  <select class="form-control" id="historyFilterStatus" onchange="App.applyHistoryFilter()">
+                    <option value="ALL">全部狀態 (All Status)</option>
+                    <option value="PENDING">待審核 (PENDING)</option>
+                    <option value="APPROVED">已核准 (APPROVED)</option>
+                    <option value="REJECTED">已駁回 (REJECTED)</option>
+                    <option value="CANCELLED">已撤銷/銷假 (CANCELLED)</option>
+                  </select>
+                </div>
+
+                <div class="form-group">
+                  <label class="form-label"><i class="fa-solid fa-calendar-day"></i> 起始日期</label>
+                  <input type="date" class="form-control" id="historyFilterStartDate" onchange="App.applyHistoryFilter()">
+                </div>
+
+                <div class="form-group">
+                  <label class="form-label"><i class="fa-solid fa-calendar-day"></i> 結束日期</label>
+                  <input type="date" class="form-control" id="historyFilterEndDate" onchange="App.applyHistoryFilter()">
+                </div>
+              </div>
+
+              <!-- 快捷區間按鈕與關鍵字搜尋 -->
+              <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border-color);">
+                <div style="display: flex; gap: 6px; flex-wrap: wrap; align-items: center;">
+                  <span style="font-size: 0.8rem; color: var(--text-muted); margin-right: 4px;">快捷時間：</span>
+                  <button class="btn btn-sm btn-secondary" onclick="App.setHistoryPresetRange('this_month')">本月</button>
+                  <button class="btn btn-sm btn-secondary" onclick="App.setHistoryPresetRange('this_year')">今年 (2026)</button>
+                  <button class="btn btn-sm btn-secondary" onclick="App.setHistoryPresetRange('last_3_months')">近三個月</button>
+                  <button class="btn btn-sm btn-secondary" onclick="App.setHistoryPresetRange('all')">全部時間</button>
+                </div>
+
+                <div style="display: flex; gap: 8px; align-items: center;">
+                  <input type="text" class="form-control" id="historyFilterKeyword" placeholder="搜尋事由或單號..." style="width: 180px; padding: 5px 10px; font-size: 0.85rem;" oninput="App.applyHistoryFilter()">
+                  <button class="btn btn-sm btn-secondary" onclick="App.resetHistoryFilter()" title="重設所有篩選條件">
+                    <i class="fa-solid fa-rotate-left"></i> 重設
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- 查詢結果統計摘要資訊條 -->
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px;">
+              <div class="content-panel" style="padding: 16px; display: flex; align-items: center; gap: 14px;">
+                <div style="width: 44px; height: 44px; border-radius: 10px; background: #eff6ff; color: var(--primary); display: flex; align-items: center; justify-content: center; font-size: 1.2rem;">
+                  <i class="fa-solid fa-list-check"></i>
+                </div>
+                <div>
+                  <div style="font-size: 0.78rem; color: var(--text-muted); font-weight: 500;">符合條件筆數</div>
+                  <strong style="font-size: 1.35rem; color: var(--text-main); font-family: 'JetBrains Mono';" id="historyStatCount">0 筆</strong>
+                </div>
+              </div>
+
+              <div class="content-panel" style="padding: 16px; display: flex; align-items: center; gap: 14px;">
+                <div style="width: 44px; height: 44px; border-radius: 10px; background: #ecfdf5; color: var(--success); display: flex; align-items: center; justify-content: center; font-size: 1.2rem;">
+                  <i class="fa-solid fa-clock"></i>
+                </div>
+                <div>
+                  <div style="font-size: 0.78rem; color: var(--text-muted); font-weight: 500;">累計請假工時</div>
+                  <strong style="font-size: 1.35rem; color: var(--success); font-family: 'JetBrains Mono';" id="historyStatHours">0.0 h</strong>
+                </div>
+              </div>
+
+              <div class="content-panel" style="padding: 16px; display: flex; align-items: center; gap: 14px;">
+                <div style="width: 44px; height: 44px; border-radius: 10px; background: #f0fdf4; color: #16a34a; display: flex; align-items: center; justify-content: center; font-size: 1.2rem;">
+                  <i class="fa-solid fa-circle-check"></i>
+                </div>
+                <div>
+                  <div style="font-size: 0.78rem; color: var(--text-muted); font-weight: 500;">已核准時數</div>
+                  <strong style="font-size: 1.35rem; color: #16a34a; font-family: 'JetBrains Mono';" id="historyStatApprovedHours">0.0 h</strong>
+                </div>
+              </div>
+
+              <div class="content-panel" style="padding: 16px; display: flex; align-items: center; gap: 14px;">
+                <div style="width: 44px; height: 44px; border-radius: 10px; background: #fffbeb; color: #b45309; display: flex; align-items: center; justify-content: center; font-size: 1.2rem;">
+                  <i class="fa-solid fa-hourglass-half"></i>
+                </div>
+                <div>
+                  <div style="font-size: 0.78rem; color: var(--text-muted); font-weight: 500;">審核中時數</div>
+                  <strong style="font-size: 1.35rem; color: #b45309; font-family: 'JetBrains Mono';" id="historyStatPendingHours">0.0 h</strong>
+                </div>
+              </div>
+            </div>
+
+            <!-- 歷史紀錄表格面板 -->
+            <div class="content-panel" style="padding: 20px;">
+              <div class="panel-header" style="margin-bottom: 12px;">
+                <div class="panel-title">
+                  <i class="fa-solid fa-table-list" style="color: var(--primary);"></i>
+                  請假明細清單
+                </div>
+                <div id="historyTypeDistribution" style="display: flex; gap: 6px; flex-wrap: wrap;"></div>
+              </div>
+
+              <div class="table-responsive">
+                <table class="custom-table">
+                  <thead>
+                    <tr>
+                      <th>單號</th>
+                      <th>假別</th>
+                      <th>薪資給付</th>
+                      <th>請假起訖時間</th>
+                      <th>請假工時</th>
+                      <th>申請事由</th>
+                      <th>證明文件</th>
+                      <th>審核狀態</th>
+                      <th>申請時間</th>
+                      <th>操作</th>
+                    </tr>
+                  </thead>
+                  <tbody id="historyTableBody">
+                    <!-- 動態渲染清單 -->
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+          </div>
+        </section>
+
+
+        <!-- ==================== 6. 系統設定與 Google Sheet 串接 ==================== -->
+        <section class="view-section" id="view-settings">
+          <div style="display: flex; flex-direction: column; gap: 24px; max-width: 960px; margin: 0 auto;">
+            
+            <!-- 非管理者權限提示 -->
+            <div id="settingsGasNonAdminNotice" style="display: none; padding: 16px 20px; background: #fffbeb; border: 1px solid #fde68a; border-radius: var(--radius-md); color: #92400e; font-size: 0.9rem;">
+              <i class="fa-solid fa-lock" style="margin-right: 8px;"></i>
+              <strong>系統設定權限說明：</strong> Google Apps Script / Google Sheet 後端串接與進階參數設定僅限<strong>管理者 (Admin)</strong> 進行配置。
+            </div>
+
+            <!-- 全員到職日與勞基法特休假管理面板 (置頂主要維護區) -->
+            <div class="form-card" style="max-width: 100%;">
+              <div class="panel-header">
+                <div class="panel-title">
+                  <i class="fa-solid fa-users-gear" style="color: var(--primary);"></i>
+                  全員到職日與勞基法第38條特休額度核算
+                </div>
+                <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                  <button class="btn btn-sm btn-primary" onclick="App.openAddUserModal()">
+                    <i class="fa-solid fa-user-plus"></i> 新增員工
+                  </button>
+                  <button class="btn btn-sm btn-secondary" onclick="App.syncAllAnnualLeaves()">
+                    <i class="fa-solid fa-arrows-rotate"></i> 一鍵同步特休至 Google Sheet
+                  </button>
+                  <button class="btn btn-sm btn-secondary" onclick="App.syncHolidays()">
+                    <i class="fa-solid fa-calendar-check"></i> 同步 2026-2030 國定假日
+                  </button>
+                </div>
+              </div>
+              <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 16px;">
+                系統將依據 <code>users</code> 分頁之到職日 (<code>hire_date</code>)，自動依勞基法第38條法規級距核發特休天數與小時，並寫入 <code>leave_balances</code> 分頁對應 ID 的 <code>ANNUAL</code> 額度。
+              </p>
+              <div class="table-responsive">
+                <table class="custom-table">
+                  <thead>
+                    <tr>
+                      <th>員工 ID</th>
+                      <th>姓名</th>
+                      <th>部門 / 角色</th>
+                      <th>到職日 (hire_date)</th>
+                      <th>計算年資</th>
+                      <th>勞基法特休天數</th>
+                      <th>換算總工時</th>
+                      <th>leave_balances (ANNUAL)</th>
+                      <th>操作</th>
+                    </tr>
+                  </thead>
+                  <tbody id="employeeSeniorityTableBody">
+                    <!-- 動態渲染 -->
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- Google Sheet 整合設定卡片 (移至系統設定最下方，限管理者) -->
+            <div class="form-card" id="settingsGasCard" style="max-width: 100%;">
+              <div class="panel-header">
+                <div class="panel-title">
+                  <i class="fa-brands fa-google-drive" style="color: #0f9d58;"></i>
+                  Google Sheet / Google Apps Script 後端串接設定
+                </div>
+                <span class="badge badge-blue">限管理者權限</span>
+              </div>
+
+              <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 16px;">
+                本系統原生支援串接 Google Sheet 作為企業差勤資料庫。您只需在 Google Sheet 貼上 <code>google-apps-script/Code.gs</code> 腳本並佈署為 Web App 即可！
+              </p>
+
+              <div class="form-group" style="margin-bottom: 16px;">
+                <label class="form-label">Google Apps Script Web 應用程式網址 (Web App URL)</label>
+                <input type="url" class="form-control" id="settingsGasUrl" placeholder="https://script.google.com/macros/s/AKfycb.../exec">
+                <span class="form-help-text">佈署時請將存取權限設為「所有人 (Anyone)」。</span>
+              </div>
+
+              <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                <button class="btn btn-primary" onclick="App.saveGasSettings()">
+                  <i class="fa-solid fa-floppy-disk"></i> 儲存並切換至 Google Sheet 連線
+                </button>
+                <button class="btn btn-secondary" onclick="App.testGasConnection()">
+                  <i class="fa-solid fa-network-wired"></i> 測試連線
+                </button>
+                <button class="btn btn-secondary" onclick="App.switchToMockMode()">
+                  <i class="fa-solid fa-database"></i> 切換回本機展示資料庫
+                </button>
+              </div>
+
+              <!-- 部署步驟教學 -->
+              <div style="margin-top: 24px; background: #f8fafc; border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 18px;">
+                <strong style="font-size: 0.9rem; color: var(--text-main);">📌 Google Sheet 3 步驟快速佈署指南：</strong>
+                <ol style="font-size: 0.82rem; color: var(--text-muted); line-height: 1.8; margin-top: 8px; padding-left: 20px;">
+                  <li>前往 <a href="https://sheets.new" target="_blank" style="color: var(--primary); text-decoration: underline;">Google Sheets (建立新試算表)</a>，點擊上方選單 <strong>擴充功能 (Extensions) &gt; Apps Script</strong>。</li>
+                  <li>將本專案 <code>google-apps-script/Code.gs</code> 的完整程式碼複製並貼上到 Apps Script 編輯器中。</li>
+                  <li>於上方函式下拉選單選擇 <code>initDatabase</code> 並點擊「執行」，系統將<strong>一鍵自動建立所有工作表與種子資料</strong>！</li>
+                  <li>點選右上角 <strong>佈署 (Deploy) &gt; 新增佈署作業 (New deployment)</strong>，類型選「網路應用程式 (Web app)」，「誰可以存取」設為<strong>所有人 (Anyone)</strong>，點擊佈署後將產生的 Web App URL 貼至上方欄位即可！</li>
+                </ol>
+              </div>
+            </div>
+
+          </div>
+        </section>
+
+      </div>
+    </main>
+
+    <!-- ==================== 行動端底部導航 (Mobile Bottom Nav) ==================== -->
+    <nav class="mobile-bottom-nav">
+      <a class="mobile-nav-item active" data-view="dashboard">
+        <i class="fa-solid fa-house-chimney"></i>
+        <span>首頁</span>
+      </a>
+      <a class="mobile-nav-item" data-view="apply-leave">
+        <i class="fa-solid fa-file-circle-plus"></i>
+        <span>請假</span>
+      </a>
+      <a class="mobile-nav-item" data-view="overtime">
+        <i class="fa-solid fa-business-time"></i>
+        <span>補休</span>
+      </a>
+      <a class="mobile-nav-item" data-view="approvals">
+        <i class="fa-solid fa-signature"></i>
+        <span>審核</span>
+      </a>
+      <a class="mobile-nav-item" data-view="calendar">
+        <i class="fa-solid fa-calendar-days"></i>
+        <span>行事曆</span>
+      </a>
+    </nav>
+
+  </div>
+
+  <!-- ==================== 彈窗 1：主管簽核動作彈窗 (Approval Modal) ==================== -->
+  <div class="modal-overlay" id="approvalModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h4 id="approvalModalTitle">審核簽核處理</h4>
+        <button class="modal-close-btn" onclick="App.closeModal('approvalModal')">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+      <div class="modal-body" id="approvalModalBody">
+        <!-- 動態注入單據詳細內容 -->
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="App.closeModal('approvalModal')">關閉</button>
+        <button class="btn btn-danger" id="btnModalReject" onclick="App.submitApprovalAction(false)">
+          <i class="fa-solid fa-ban"></i> 退回申請
+        </button>
+        <button class="btn btn-success" id="btnModalApprove" onclick="App.submitApprovalAction(true)">
+          <i class="fa-solid fa-check"></i> 同意簽核
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== 彈窗 2：加班申報彈窗 (Overtime Modal) ==================== -->
+  <div class="modal-overlay" id="overtimeModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h4>填寫加班申報單</h4>
+        <button class="modal-close-btn" onclick="App.closeModal('overtimeModal')">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+      <form onsubmit="App.handleOvertimeSubmit(event)">
+        <div class="modal-body">
+          <div class="form-group" style="margin-bottom: 14px;">
+            <label class="form-label">加班日期 <span class="req-star">*</span></label>
+            <input type="date" class="form-control" id="otDate" required>
+          </div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px;">
+            <div class="form-group">
+              <label class="form-label">加班開始時間 <span class="req-star">*</span></label>
+              <input type="time" class="form-control" id="otStart" required value="18:30" onchange="App.calcOtHours()">
+            </div>
+            <div class="form-group">
+              <label class="form-label">加班結束時間 <span class="req-star">*</span></label>
+              <input type="time" class="form-control" id="otEnd" required value="21:30" onchange="App.calcOtHours()">
+            </div>
+          </div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px;">
+            <div class="form-group">
+              <label class="form-label">加班申報工時</label>
+              <input type="number" step="0.5" class="form-control" id="otHours" required value="3.0" onchange="App.calcOtHours()">
+            </div>
+            <div class="form-group">
+              <label class="form-label">補休換算倍率</label>
+              <select class="form-control" id="otRate" onchange="App.calcOtHours()">
+                <option value="1.0">1.0 倍 (標準一比一)</option>
+                <option value="1.34" selected>1.34 倍 (平日加班前2小時)</option>
+                <option value="1.67">1.67 倍 (平日加班第3小時起/假日)</option>
+              </select>
+            </div>
+          </div>
+          <div style="padding: 10px 14px; background: #ecfdf5; border-radius: var(--radius-md); margin-bottom: 14px; display: flex; justify-content: space-between; align-items: center;">
+            <span style="font-size: 0.85rem; color: #065f46; font-weight: 600;">核准後預計發放補休：</span>
+            <strong style="font-size: 1.15rem; color: var(--success); font-family: 'JetBrains Mono', monospace;" id="otCalculatedCompHours">4.0 小時</strong>
+          </div>
+          <div class="form-group">
+            <label class="form-label">加班事由與工作內容 <span class="req-star">*</span></label>
+            <textarea class="form-control" id="otReason" rows="3" required placeholder="請詳細填寫加班原因與產出事項..."></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="App.closeModal('overtimeModal')">取消</button>
+          <button type="submit" class="btn btn-primary">送出加班申報</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ==================== 彈窗 3：新增員工彈窗 (Add User Modal) ==================== -->
+  <div class="modal-overlay" id="addUserModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h4><i class="fa-solid fa-user-plus" style="color: var(--primary);"></i> 新增企業員工</h4>
+        <button class="modal-close-btn" onclick="App.closeModal('addUserModal')">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+      <form onsubmit="App.handleAddUserSubmit(event)">
+        <div class="modal-body">
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px;">
+            <div class="form-group">
+              <label class="form-label">員工姓名 <span class="req-star">*</span></label>
+              <input type="text" class="form-control" id="newUserName" required placeholder="如：王大明">
+            </div>
+            <div class="form-group">
+              <label class="form-label">員工編號 (ID)</label>
+              <input type="text" class="form-control" id="newUserId" placeholder="留空自動產生 (如 EMP006)">
+            </div>
+          </div>
+
+          <div class="form-group" style="margin-bottom: 14px;">
+            <label class="form-label">公司電子信箱 (Email) <span class="req-star">*</span></label>
+            <input type="email" class="form-control" id="newUserEmail" required placeholder="如：daming@company.com">
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px;">
+            <div class="form-group">
+              <label class="form-label">所屬部門 <span class="req-star">*</span></label>
+              <select class="form-control" id="newUserDept" required>
+                <option value="研發部">研發部 (DEPT_RD)</option>
+                <option value="行銷部">行銷部 (DEPT_MKT)</option>
+                <option value="人力資源部">人力資源部 (DEPT_HR)</option>
+                <option value="業務部">業務部 (DEPT_SALES)</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">直屬主管 (簽核人)</label>
+              <select class="form-control" id="newUserManager">
+                <option value="EMP002">陳主管 (研發部)</option>
+                <option value="EMP001">李泰叡 (HR/Admin)</option>
+                <option value="EMP003">林經理 (HR/Admin)</option>
+              </select>
+            </div>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px;">
+            <div class="form-group">
+              <label class="form-label">系統權限角色 <span class="req-star">*</span></label>
+              <select class="form-control" id="newUserRole" required>
+                <option value="Employee" selected>一般同仁 (Employee)</option>
+                <option value="Manager">部門主管 (Manager)</option>
+                <option value="Admin">人事管理員 (HR / Admin)</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">到職日 (hire_date) <span class="req-star">*</span></label>
+              <input type="date" class="form-control" id="newUserHireDate" required onchange="App.previewNewUserAnnualLeave()">
+            </div>
+          </div>
+
+          <div class="form-group" style="margin-bottom: 14px;">
+            <label class="form-label">預設登入密碼</label>
+            <input type="text" class="form-control" id="newUserPassword" value="123456" placeholder="預設 123456">
+          </div>
+
+          <!-- 勞基法特休即時預覽 -->
+          <div style="padding: 10px 14px; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: var(--radius-md); font-size: 0.85rem; color: #1e40af;">
+            <i class="fa-solid fa-scale-balanced"></i>
+            <span id="newUserAnnualPreview">請選擇到職日，系統將依勞基法第38條自動核算特休額度...</span>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="App.closeModal('addUserModal')">取消</button>
+          <button type="submit" class="btn btn-primary">
+            <i class="fa-solid fa-check"></i> 確認建立員工與額度
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ==================== 彈窗 4：撤銷 / 銷假確認彈窗 (Cancel Modal) ==================== -->
+  <div class="modal-overlay" id="cancelModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h4 id="cancelModalTitle">請假單撤銷 / 銷假</h4>
+        <button class="modal-close-btn" onclick="App.closeModal('cancelModal')">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div id="cancelModalPrompt" style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 16px;"></div>
+        <div class="form-group">
+          <label class="form-label">事由說明 <span class="req-star">*</span></label>
+          <textarea class="form-control" id="cancelReasonInput" rows="3" required placeholder="請填寫撤銷或銷假之原因..."></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="App.closeModal('cancelModal')">取消</button>
+        <button class="btn btn-danger" id="btnConfirmCancel" onclick="App.executeCancelLeave()">
+          確認執行
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== 彈窗 5：刪除員工確認彈窗 (Delete User Modal) ==================== -->
+  <div class="modal-overlay" id="deleteUserModal">
+    <div class="modal-content" style="max-width: 440px;">
+      <div class="modal-header">
+        <h4 style="color: var(--danger);"><i class="fa-solid fa-triangle-exclamation"></i> 刪除員工確認</h4>
+        <button class="modal-close-btn" onclick="App.closeModal('deleteUserModal')">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div id="deleteUserPrompt" style="font-size: 0.92rem; line-height: 1.6; color: var(--text-main); margin-bottom: 12px;"></div>
+        <div style="padding: 10px 14px; background: #fff1f2; border: 1px solid #fecdd3; border-radius: var(--radius-md); font-size: 0.82rem; color: #be123c;">
+          <i class="fa-solid fa-circle-exclamation"></i>
+          <strong>注意：</strong> 刪除後將同步從 Google Sheet <code>users</code> 工作表移除該員工資料，並一併清除其在 <code>leave_balances</code> 的假別額度紀錄。
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="App.closeModal('deleteUserModal')">取消</button>
+        <button class="btn btn-danger" id="btnConfirmDeleteUser" onclick="App.executeDeleteUser()">
+          <i class="fa-solid fa-trash-can"></i> 確認刪除
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast 訊息提示容器 -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <!-- 系統核心 JS 模組載入 -->
+  <script src="js/config.js"></script>
+  <script src="js/engine.js"></script>
+  <script src="js/mock-data.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

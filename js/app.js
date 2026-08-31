@@ -1,0 +1,1862 @@
+/**
+ * 智慧請假與補休管理系統 - 主應用程式核心控制器 (Main Application Controller)
+ */
+const App = {
+  state: {
+    currentUser: null,
+    users: [],
+    leaveTypes: [],
+    balances: [],
+    requests: [],
+    overtimes: [],
+    logs: [],
+    holidays: [],
+    config: {},
+    currentView: "dashboard",
+    approvalTab: "leaves",
+    calendarYear: 2026,
+    calendarMonth: 8, // 0-indexed, 8 代表 9月
+    activeActionItem: null // 當前正在審核或撤銷的單據
+  },
+
+  /**
+   * 初始化系統
+   */
+  async init() {
+    this.setupEventListeners();
+    await this.checkAuth();
+  },
+
+  /**
+   * 檢查登入狀態
+   */
+  async checkAuth() {
+    const isLoggedIn = localStorage.getItem(SYSTEM_CONFIG.STORAGE_KEYS.SESSION_LOGGED_IN) === "true";
+    const loginOverlay = document.getElementById("loginScreen");
+
+    if (isLoggedIn) {
+      if (loginOverlay) loginOverlay.classList.add("hidden");
+      await this.loadData();
+      this.renderHeader();
+      this.navigate(this.state.currentView);
+    } else {
+      if (loginOverlay) loginOverlay.classList.remove("hidden");
+    }
+  },
+
+  /**
+   * 執行登入程序
+   */
+  async handleLogin(e) {
+    if (e && e.preventDefault) e.preventDefault();
+    const email = document.getElementById("loginEmail").value.trim();
+    const password = document.getElementById("loginPassword").value;
+    const errorBanner = document.getElementById("loginErrorBanner");
+    const submitBtn = document.getElementById("btnLoginSubmit");
+
+    if (errorBanner) errorBanner.style.display = "none";
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> 驗證登入中...`;
+    }
+
+    try {
+      const res = await ApiService.login(email, password);
+
+      if (res.success && res.user) {
+        localStorage.setItem(SYSTEM_CONFIG.STORAGE_KEYS.SESSION_LOGGED_IN, "true");
+        localStorage.setItem(SYSTEM_CONFIG.STORAGE_KEYS.ACTIVE_USER_ID, res.user.id);
+
+        const loginOverlay = document.getElementById("loginScreen");
+        if (loginOverlay) loginOverlay.classList.add("hidden");
+
+        await this.loadData(res.user.id);
+        this.renderHeader();
+        this.navigate("dashboard");
+        this.showToast(`歡迎回來，${res.user.name} (${res.user.department_name} ${res.user.role})！`, "success");
+      } else {
+        if (errorBanner) {
+          errorBanner.style.display = "flex";
+          document.getElementById("loginErrorMsg").textContent = res.message || "電子信箱或密碼錯誤，請重新確認。";
+        }
+        this.showToast(res.message || "登入失敗", "error");
+      }
+    } catch (err) {
+      if (errorBanner) {
+        errorBanner.style.display = "flex";
+        document.getElementById("loginErrorMsg").textContent = "連線異常：" + err.message;
+      }
+    } finally {
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = `<i class="fa-solid fa-right-to-bracket"></i> 登入系統`;
+      }
+    }
+  },
+
+  /**
+   * 快速體驗身分切換登入 (Demo Quick Login)
+   */
+  async quickLogin(email, password) {
+    document.getElementById("loginEmail").value = email;
+    document.getElementById("loginPassword").value = password;
+    await this.handleLogin();
+  },
+
+  /**
+   * 切換密碼明文/隱藏
+   */
+  togglePasswordVisibility(inputId, btnElem) {
+    const input = document.getElementById(inputId);
+    if (!input) return;
+    const isPassword = (input.type === "password");
+    input.type = isPassword ? "text" : "password";
+
+    const icon = btnElem.querySelector("i");
+    if (icon) {
+      icon.className = isPassword ? "fa-solid fa-eye" : "fa-solid fa-eye-slash";
+    }
+  },
+
+  /**
+   * 登出系統
+   */
+  handleLogout() {
+    localStorage.removeItem(SYSTEM_CONFIG.STORAGE_KEYS.SESSION_LOGGED_IN);
+    const loginOverlay = document.getElementById("loginScreen");
+    if (loginOverlay) {
+      loginOverlay.classList.remove("hidden");
+    }
+    const errorBanner = document.getElementById("loginErrorBanner");
+    if (errorBanner) errorBanner.style.display = "none";
+    this.showToast("您已安全登出系統。", "info");
+  },
+
+  /**
+   * 載入資料 (從 API 或 Local Mock)
+   */
+  async loadData(userId = null) {
+    const activeId = userId || localStorage.getItem(SYSTEM_CONFIG.STORAGE_KEYS.ACTIVE_USER_ID) || "EMP001";
+    const res = await ApiService.getBootstrapData(activeId);
+    
+    if (res.success && res.data) {
+      this.state.currentUser = res.data.currentUser;
+      this.state.users = res.data.users;
+      this.state.leaveTypes = res.data.leaveTypes;
+      this.state.balances = res.data.balances;
+      this.state.requests = res.data.requests;
+      this.state.overtimes = res.data.overtimes;
+      this.state.logs = res.data.logs;
+      this.state.holidays = res.data.holidays;
+      this.state.config = res.data.config;
+      
+      localStorage.setItem(SYSTEM_CONFIG.STORAGE_KEYS.ACTIVE_USER_ID, this.state.currentUser.id);
+    }
+  },
+
+  /**
+   * 事件監聽綁定
+   */
+  setupEventListeners() {
+    // 側邊欄與底部導航點擊切換
+    document.querySelectorAll(".nav-item, .mobile-nav-item").forEach(item => {
+      item.addEventListener("click", () => {
+        const view = item.getAttribute("data-view");
+        if (view) this.navigate(view);
+      });
+    });
+
+    // 行動端選單展開
+    const menuBtn = document.getElementById("mobileMenuBtn");
+    const sidebar = document.getElementById("appSidebar");
+    if (menuBtn && sidebar) {
+      menuBtn.addEventListener("click", () => {
+        sidebar.classList.toggle("open");
+      });
+    }
+
+    // 點擊空白處關閉行動端側邊欄
+    document.addEventListener("click", (e) => {
+      if (sidebar && sidebar.classList.contains("open") && !sidebar.contains(e.target) && e.target !== menuBtn && !menuBtn.contains(e.target)) {
+        sidebar.classList.remove("open");
+      }
+    });
+  },
+
+  /**
+   * 視圖切換
+   */
+  navigate(viewName) {
+    const user = this.state.currentUser;
+    const isAdmin = user && (user.role === "Admin" || user.role === "HR");
+
+    // 嚴格權限防護：系統設定專區僅限系統管理者 (Admin) 存取
+    if (viewName === "settings" && !isAdmin) {
+      this.showToast("權限不足：系統設定專區僅限管理者 (Admin) 存取！", "error");
+      viewName = "dashboard";
+    }
+
+    this.state.currentView = viewName;
+
+    // 隱藏所有視圖，顯示目標視圖
+    document.querySelectorAll(".view-section").forEach(sec => sec.classList.remove("active"));
+    const targetView = document.getElementById(`view-${viewName}`);
+    if (targetView) targetView.classList.add("active");
+
+    // 更新導航選單高亮
+    document.querySelectorAll(".nav-item, .mobile-nav-item").forEach(item => {
+      if (item.getAttribute("data-view") === viewName) {
+        item.classList.add("active");
+      } else {
+        item.classList.remove("active");
+      }
+    });
+
+    // 關閉行動端側欄
+    const sidebar = document.getElementById("appSidebar");
+    if (sidebar) sidebar.classList.remove("open");
+
+    // 更新 Header 標題與渲染特定視圖
+    const titles = {
+      "dashboard": { title: "差勤儀表板", sub: "每日工時 08:30 - 18:00 (午休 12:00 - 13:30 扣 1.5h)" },
+      "apply-leave": { title: "線上請假申請單", sub: "自動計算工時、避開假日與午休、防呆檢核與額度鎖定" },
+      "overtime": { title: "加班申報與補休存摺", sub: "申報加班工時，核准後自動轉換補休額度入帳" },
+      "history": { title: "個人差勤歷史紀錄", sub: "依假別、時間區間自訂多條件查詢，並支援一鍵匯出 CSV / Excel 報表" },
+      "approvals": { title: "審核簽核中心", sub: "支援主管與人資進行請假、銷假與加班換補休之審核" },
+      "calendar": { title: "團隊差勤行事曆", sub: "檢視部門差勤分佈與 2026 國定假日排程" },
+      "settings": { title: "系統設定與 Google Sheet 串接", sub: "管理 Google Apps Script 雲端同步與本機資料庫" }
+    };
+
+    if (titles[viewName]) {
+      document.getElementById("pageTitle").textContent = titles[viewName].title;
+      document.getElementById("pageSubtitle").textContent = titles[viewName].sub;
+    }
+
+    // 依視圖觸發渲染
+    switch (viewName) {
+      case "dashboard":
+        this.renderDashboard();
+        break;
+      case "apply-leave":
+        this.renderLeaveForm();
+        break;
+      case "overtime":
+        this.renderOvertimeView();
+        break;
+      case "history":
+        this.renderHistory();
+        break;
+      case "approvals":
+        this.renderApprovalsView();
+        break;
+      case "calendar":
+        this.renderCalendar();
+        break;
+      case "settings":
+        this.renderSettings();
+        break;
+    }
+
+    this.updatePendingBadges();
+  },
+
+  /**
+   * 快速切換測試身分
+   */
+  async switchUser(userId) {
+    await this.loadData(userId);
+    this.renderHeader();
+    this.navigate(this.state.currentView);
+    this.showToast(`已切換為：${this.state.currentUser.name} (${this.state.currentUser.role})`, "info");
+  },
+
+  /**
+   * 渲染頂部 Header 使用者狀態
+   */
+  renderHeader() {
+    const user = this.state.currentUser;
+    if (!user) return;
+
+    document.getElementById("userName").textContent = user.name;
+    document.getElementById("heroUserName").textContent = user.name;
+    document.getElementById("userRoleTag").textContent = `${user.department_name} · ${user.role}`;
+    document.getElementById("userAvatar").textContent = user.name.charAt(0);
+
+    const selector = document.getElementById("roleSelector");
+    if (selector) selector.value = user.id;
+
+    // Google Sheet 連線狀態指示
+    const isRemote = ApiService.isUsingRemoteGas();
+    const dot = document.getElementById("sheetStatusDot");
+    const text = document.getElementById("sheetStatusText");
+    if (isRemote) {
+      dot.classList.remove("offline");
+      text.textContent = "Google Sheet 連線中";
+    } else {
+      dot.classList.add("offline");
+      text.textContent = "本機展示資料庫";
+    }
+  },
+
+  /**
+   * 1. 渲染儀表板 (Dashboard)
+   */
+  renderDashboard() {
+    const user = this.state.currentUser;
+    const year = SYSTEM_CONFIG.CURRENT_YEAR;
+    
+    // 渲染勞基法特休標準提示條
+    const hireDate = user.hire_date ? LeaveEngine.formatDateOnly(user.hire_date) : "2024-03-01";
+    const stat = LeaveEngine.calculateStatutoryAnnualLeave(hireDate);
+    const hireEl = document.getElementById("dashboardHireDate");
+    const statDaysEl = document.getElementById("dashboardStatutoryDays");
+    const badgeEl = document.getElementById("seniorityBadge");
+    const descEl = document.getElementById("statutoryDescText");
+
+    if (hireEl) hireEl.textContent = hireDate;
+    if (statDaysEl) statDaysEl.textContent = `${stat.days} 天 (${stat.hours}h)`;
+    if (badgeEl) badgeEl.textContent = `年資：${stat.seniorityText || "計算中"}`;
+    if (descEl) descEl.textContent = `${stat.description} · 已自動更新至 leave_balances 表 ANNUAL 額度。`;
+
+    // 假別額度卡片渲染
+    const userBalances = this.state.balances.filter(b => b.user_id === user.id && b.year === year);
+    const balanceGrid = document.getElementById("balanceCardsGrid");
+    balanceGrid.innerHTML = "";
+
+    const priorityTypes = ["ANNUAL", "COMP", "PERSONAL", "SICK"];
+    priorityTypes.forEach(typeId => {
+      const typeDef = SYSTEM_CONFIG.LEAVE_TYPES.find(t => t.id === typeId) || { name: typeId, color: "#4f46e5" };
+      let bal = userBalances.find(b => b.leave_type_id === typeId);
+      if (!bal) {
+        bal = { total_hours: 0, used_hours: 0, pending_hours: 0 };
+      }
+
+      const isExempt = (typeId === "PERSONAL" || typeId === "SICK");
+      const total = bal.total_hours;
+      const used = bal.used_hours;
+      const pending = bal.pending_hours;
+      const remaining = isExempt ? "不限" : Math.max(0, total - used - pending);
+      const usedPercent = (!isExempt && total > 0) ? Math.min(100, Math.round(((used + pending) / total) * 100)) : 100;
+      const strokeDash = isExempt ? "100, 100" : `${usedPercent}, 100`;
+
+      const card = document.createElement("div");
+      card.className = "balance-card";
+      card.innerHTML = `
+        <div class="balance-card-header">
+          <span class="balance-card-title">
+            <span class="type-indicator-pill" style="background-color: ${typeDef.color};"></span>
+            ${typeDef.name}
+          </span>
+          <span class="badge ${typeDef.badgeClass || 'badge-blue'}">${typeDef.isPaid ? '有薪假' : '不支薪'}</span>
+        </div>
+        <div class="balance-ring-wrap">
+          <div class="balance-nums">
+            <div>
+              <span class="balance-rem-big" style="${isExempt ? 'font-size: 1.8rem;' : ''}">${remaining}</span>
+              ${!isExempt ? '<span class="balance-unit">小時</span>' : ''}
+            </div>
+            <span class="balance-rem-label">${isExempt ? '依需求申請 (無上限)' : '剩餘可用額度'}</span>
+          </div>
+          <svg viewBox="0 0 36 36" class="circular-chart" style="color: ${typeDef.color};">
+            <path class="circle-bg" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+            <path class="circle" stroke="${typeDef.color}" stroke-dasharray="${strokeDash}" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+          </svg>
+        </div>
+        <div class="balance-card-breakdown">
+          <div class="breakdown-item">${isExempt ? '額度限制: <strong>無限制</strong>' : `總額度: <strong>${total}</strong>h`}</div>
+          <div class="breakdown-item">已使用: <strong>${used}</strong>h</div>
+          <div class="breakdown-item" style="color: #b45309;">審核鎖定: <strong>${pending}</strong>h</div>
+        </div>
+      `;
+      balanceGrid.appendChild(card);
+    });
+
+    // 渲染我的差勤請假紀錄表
+    const myRequests = this.state.requests.filter(r => r.user_id === user.id);
+    const tableBody = document.getElementById("myRequestsTableBody");
+    tableBody.innerHTML = "";
+
+    if (myRequests.length === 0) {
+      tableBody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--text-muted); padding: 24px;">尚無任何差勤申請紀錄</td></tr>`;
+    } else {
+      myRequests.forEach(req => {
+        const typeDef = SYSTEM_CONFIG.LEAVE_TYPES.find(t => t.id === req.leave_type_id) || { name: req.leave_type_id };
+        const statusBadge = this.getStatusBadgeHtml(req.status, req.current_step);
+
+        let actionBtn = "";
+        if (req.status === "PENDING") {
+          actionBtn = `<button class="btn btn-sm btn-secondary" style="color: var(--danger);" onclick="App.handleCancelClick('${req.id}', 'PENDING')">
+            <i class="fa-solid fa-xmark"></i> 撤銷
+          </button>`;
+        } else if (req.status === "APPROVED") {
+          actionBtn = `<button class="btn btn-sm btn-secondary" style="color: var(--purple);" onclick="App.handleCancelClick('${req.id}', 'APPROVED')">
+            <i class="fa-solid fa-arrow-rotate-left"></i> 銷假
+          </button>`;
+        } else {
+          actionBtn = `<span style="font-size: 0.8rem; color: var(--text-muted);">-</span>`;
+        }
+
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td><strong style="color: var(--primary); font-family: 'JetBrains Mono';">${req.id}</strong></td>
+          <td><span class="badge ${typeDef.badgeClass || 'badge-blue'}">${typeDef.name}</span></td>
+          <td>
+            <div style="font-weight: 500;">${req.start_time}</div>
+            <div style="font-size: 0.8rem; color: var(--text-muted);">至 ${req.end_time}</div>
+          </td>
+          <td><strong style="color: var(--text-main);">${req.total_hours}</strong> 小時</td>
+          <td>${statusBadge}</td>
+          <td>${actionBtn}</td>
+        `;
+        tableBody.appendChild(tr);
+      });
+    }
+
+    // 渲染補休存摺摘要
+    const compBal = userBalances.find(b => b.leave_type_id === "COMP") || { total_hours: 0, used_hours: 0, pending_hours: 0 };
+    const compRemaining = Math.max(0, compBal.total_hours - compBal.used_hours - compBal.pending_hours);
+    const compSummaryBox = document.getElementById("compWalletSummaryBox");
+    compSummaryBox.innerHTML = `
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+        <span style="color: var(--text-muted);">目前可用補休時數：</span>
+        <strong style="font-size: 1.35rem; color: var(--success); font-family: 'JetBrains Mono';">${compRemaining} 小時</strong>
+      </div>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 0.8rem; background: #fafafa; padding: 10px; border-radius: var(--radius-sm);">
+        <div>累積取得：<strong>${compBal.total_hours}</strong> h</div>
+        <div>已請休：<strong>${compBal.used_hours}</strong> h</div>
+      </div>
+    `;
+
+    // 檢查主管待審核警示
+    this.checkManagerAlert();
+  },
+
+  /**
+   * 2. 渲染請假表單 (Leave Application Form)
+   */
+  renderLeaveForm() {
+    const leaveTypeSelect = document.getElementById("formLeaveType");
+    leaveTypeSelect.innerHTML = "";
+
+    this.state.leaveTypes.forEach(t => {
+      const opt = document.createElement("option");
+      opt.value = t.id;
+      opt.textContent = `${t.name} (最小單位: ${t.min_unit}h)`;
+      leaveTypeSelect.appendChild(opt);
+    });
+
+    // 設定預設時間 (今日 08:30 ~ 今日 18:00)
+    const today = new Date();
+    const todayStr = LeaveEngine.formatDateOnly(today);
+    document.getElementById("formStartTime").value = `${todayStr}T08:30`;
+    document.getElementById("formEndTime").value = `${todayStr}T18:00`;
+
+    this.onFormChange();
+  },
+
+  /**
+   * 表單欄位變更時觸發即時試算與檢核
+   */
+  onFormChange() {
+    this.calcLiveHours();
+  },
+
+  /**
+   * 即時工時與額度扣抵試算
+   */
+  calcLiveHours() {
+    const user = this.state.currentUser;
+    const leaveTypeId = document.getElementById("formLeaveType").value;
+    const startTime = document.getElementById("formStartTime").value.replace("T", " ");
+    const endTime = document.getElementById("formEndTime").value.replace("T", " ");
+
+    if (!user) return;
+
+    const typeDef = SYSTEM_CONFIG.LEAVE_TYPES.find(t => t.id === leaveTypeId);
+    if (typeDef) {
+      document.getElementById("formLeaveTypeDesc").textContent = typeDef.description;
+      const attReq = document.getElementById("attachmentReqBadge");
+      if (typeDef.requiresAttachment) {
+        attReq.style.display = "inline";
+      } else {
+        attReq.style.display = "none";
+      }
+    }
+
+    // 計算可用餘額
+    const year = new Date(startTime || new Date()).getFullYear();
+    const bal = this.state.balances.find(b => b.user_id === user.id && b.leave_type_id === leaveTypeId && b.year === year);
+    const total = bal ? bal.total_hours : 0;
+    const used = bal ? bal.used_hours : 0;
+    const pending = bal ? bal.pending_hours : 0;
+    const available = Math.max(0, total - used - pending);
+    const isQuotaExempt = (leaveTypeId === "PERSONAL" || leaveTypeId === "SICK");
+
+    // 試算工時 (08:30-18:00, 午休 12:00-13:30 扣 1.5h, 扣除假日)
+    const hours = LeaveEngine.calculateHours(startTime, endTime, this.state.holidays);
+    document.getElementById("previewCalculatedHours").textContent = hours.toFixed(1);
+
+    const postRemElem = document.getElementById("previewPostRemaining");
+
+    if (isQuotaExempt) {
+      document.getElementById("formAvailableBalance").textContent = `無上限限制（${typeDef ? typeDef.name : leaveTypeId}無預設額度限制，可依需求直接申請，累計已請 ${used}h）`;
+      postRemElem.textContent = `不限額度（送出後累計 ${(used + pending + hours).toFixed(1)} 小時）`;
+      postRemElem.style.color = "var(--primary)";
+    } else {
+      document.getElementById("formAvailableBalance").textContent = `${available} 小時 (總額 ${total}h - 已用 ${used}h - 鎖定 ${pending}h)`;
+      const postRemaining = available - hours;
+      if (postRemaining < 0) {
+        postRemElem.textContent = `${postRemaining.toFixed(1)} 小時 (額度不足！)`;
+        postRemElem.style.color = "var(--danger)";
+      } else {
+        postRemElem.textContent = `${postRemaining.toFixed(1)} 小時`;
+        postRemElem.style.color = "var(--text-main)";
+      }
+    }
+
+    // 重疊衝突檢核
+    const overlap = LeaveEngine.checkOverlapping(startTime, endTime, this.state.requests, user.id);
+    const alertBox = document.getElementById("overlapAlertBox");
+    const submitBtn = document.getElementById("btnSubmitLeave");
+
+    if (overlap.hasOverlap) {
+      alertBox.style.display = "flex";
+      document.getElementById("overlapAlertMsg").textContent = `申請時段與現有請假單 (${overlap.conflictedRequest.id}: ${overlap.conflictedRequest.start_time} ~ ${overlap.conflictedRequest.end_time}) 發生重疊衝突！`;
+      submitBtn.disabled = true;
+      submitBtn.style.opacity = "0.5";
+    } else {
+      alertBox.style.display = "none";
+      submitBtn.disabled = false;
+      submitBtn.style.opacity = "1";
+    }
+
+    // 審核路線預覽
+    const route = LeaveEngine.getApprovalRoute(hours, user, this.state.users);
+    document.getElementById("routeSummaryText").textContent = route.summary;
+    const stepper = document.getElementById("routeStepsStepper");
+    stepper.innerHTML = "";
+
+    route.steps.forEach((step, idx) => {
+      const stepElem = document.createElement("div");
+      stepElem.className = "step-node";
+      stepElem.innerHTML = `
+        <div class="step-circle">${idx + 1}</div>
+        <span>${step.title} (<strong>${step.approver}</strong>)</span>
+      `;
+      stepper.appendChild(stepElem);
+
+      if (idx < route.steps.length - 1) {
+        const arrow = document.createElement("div");
+        arrow.className = "step-arrow";
+        arrow.innerHTML = `<i class="fa-solid fa-arrow-right"></i>`;
+        stepper.appendChild(arrow);
+      }
+    });
+  },
+
+  /**
+   * 快捷時段填入
+   */
+  applyPresetTime(preset) {
+    const today = new Date();
+    const todayStr = LeaveEngine.formatDateOnly(today);
+
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const tomorrowStr = LeaveEngine.formatDateOnly(tomorrow);
+
+    const startElem = document.getElementById("formStartTime");
+    const endElem = document.getElementById("formEndTime");
+
+    // 樣式切換
+    document.querySelectorAll(".preset-chip").forEach(c => c.classList.remove("active"));
+    if (event && event.target) {
+      event.target.closest(".preset-chip")?.classList.add("active");
+    }
+
+    switch (preset) {
+      case "full":
+        startElem.value = `${todayStr}T08:30`;
+        endElem.value = `${todayStr}T18:00`;
+        break;
+      case "morning":
+        startElem.value = `${todayStr}T08:30`;
+        endElem.value = `${todayStr}T12:00`;
+        break;
+      case "afternoon":
+        startElem.value = `${todayStr}T13:30`;
+        endElem.value = `${todayStr}T18:00`;
+        break;
+      case "tomorrow":
+        startElem.value = `${tomorrowStr}T08:30`;
+        endElem.value = `${tomorrowStr}T18:00`;
+        break;
+      case "multidays": {
+        // 4 個工作天 (例如今天到 4 天後)
+        const multiEnd = new Date(today);
+        multiEnd.setDate(multiEnd.getDate() + 5);
+        startElem.value = `${todayStr}T08:30`;
+        endElem.value = `${LeaveEngine.formatDateOnly(multiEnd)}T18:00`;
+        break;
+      }
+    }
+
+    this.onFormChange();
+  },
+
+  /**
+   * 送出請假申請
+   */
+  async handleLeaveSubmit(e) {
+    e.preventDefault();
+    const user = this.state.currentUser;
+    const leaveTypeId = document.getElementById("formLeaveType").value;
+    const startTime = document.getElementById("formStartTime").value.replace("T", " ");
+    const endTime = document.getElementById("formEndTime").value.replace("T", " ");
+    const reason = document.getElementById("formReason").value;
+    const attachmentUrl = document.getElementById("formAttachment").value;
+
+    const payload = {
+      userId: user.id,
+      leaveTypeId,
+      startTime,
+      endTime,
+      reason,
+      attachmentUrl
+    };
+
+    const res = await ApiService.applyLeave(payload);
+    if (res.success) {
+      this.showToast(res.message, "success");
+      await this.loadData(user.id);
+      this.navigate("dashboard");
+    } else {
+      this.showToast(res.message, "error");
+    }
+  },
+
+  /**
+   * 3. 渲染加班申報與補休專區 (Overtime View)
+   */
+  renderOvertimeView() {
+    const user = this.state.currentUser;
+    const year = SYSTEM_CONFIG.CURRENT_YEAR;
+
+    const compBal = this.state.balances.find(b => b.user_id === user.id && b.leave_type_id === "COMP" && b.year === year) || {
+      total_hours: 0, used_hours: 0, pending_hours: 0
+    };
+    const compRemaining = Math.max(0, compBal.total_hours - compBal.used_hours - compBal.pending_hours);
+
+    document.getElementById("otCompRemainingHours").textContent = compRemaining.toFixed(1);
+    document.getElementById("otCompTotalHours").textContent = compBal.total_hours.toFixed(1);
+    document.getElementById("otCompUsedHours").textContent = compBal.used_hours.toFixed(1);
+    document.getElementById("otCompPendingHours").textContent = compBal.pending_hours.toFixed(1);
+
+    // 渲染個人加班申報紀錄
+    const myOts = this.state.overtimes.filter(o => o.user_id === user.id);
+    const tableBody = document.getElementById("myOvertimeTableBody");
+    tableBody.innerHTML = "";
+
+    if (myOts.length === 0) {
+      tableBody.innerHTML = `<tr><td colspan="8" style="text-align: center; color: var(--text-muted); padding: 24px;">尚無加班申報紀錄</td></tr>`;
+    } else {
+      myOts.forEach(ot => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td><strong>${ot.id}</strong></td>
+          <td>${ot.date}</td>
+          <td>${ot.start_time} ~ ${ot.end_time}</td>
+          <td><strong>${ot.hours}</strong> h</td>
+          <td><strong style="color: var(--success); font-family: 'JetBrains Mono';">+${ot.comp_hours}</strong> h (${ot.comp_rate}x)</td>
+          <td>${ot.reason}</td>
+          <td style="font-size: 0.8rem; color: var(--text-muted);">${ot.expiry_date || '--'}</td>
+          <td>${this.getStatusBadgeHtml(ot.status, "COMPLETED")}</td>
+        `;
+        tableBody.appendChild(tr);
+      });
+    }
+  },
+
+  /**
+   * 開啟加班申報彈窗
+   */
+  showOvertimeModal() {
+    const todayStr = LeaveEngine.formatDateOnly(new Date());
+    document.getElementById("otDate").value = todayStr;
+    this.calcOtHours();
+    document.getElementById("overtimeModal").classList.add("active");
+  },
+
+  /**
+   * 計算加班可換算補休時數
+   */
+  calcOtHours() {
+    const hours = parseFloat(document.getElementById("otHours").value) || 0;
+    const rate = parseFloat(document.getElementById("otRate").value) || 1.0;
+    const compHours = (hours * rate).toFixed(1);
+    document.getElementById("otCalculatedCompHours").textContent = `${compHours} 小時`;
+  },
+
+  /**
+   * 送出加班申報
+   */
+  async handleOvertimeSubmit(e) {
+    e.preventDefault();
+    const user = this.state.currentUser;
+    const date = document.getElementById("otDate").value;
+    const startTime = document.getElementById("otStart").value;
+    const endTime = document.getElementById("otEnd").value;
+    const hours = parseFloat(document.getElementById("otHours").value) || 0;
+    const compRate = parseFloat(document.getElementById("otRate").value) || 1.0;
+    const reason = document.getElementById("otReason").value;
+
+    const payload = {
+      userId: user.id,
+      date,
+      startTime,
+      endTime,
+      hours,
+      compRate,
+      reason
+    };
+
+    const res = await ApiService.applyOvertime(payload);
+    if (res.success) {
+      this.showToast(res.message, "success");
+      this.closeModal("overtimeModal");
+      await this.loadData(user.id);
+      this.renderOvertimeView();
+    } else {
+      this.showToast(res.message, "error");
+    }
+  },
+
+  /**
+   * 4. 渲染審核中心 (Approval Center)
+   */
+  renderApprovalsView() {
+    const user = this.state.currentUser;
+    const isManager = (user.role === "Manager" || user.role === "Admin");
+    const isAdmin = (user.role === "Admin");
+
+    // 依權限過濾待審清單
+    // 請假單待審
+    const pendingLeaves = this.state.requests.filter(r => {
+      if (r.status !== "PENDING") return false;
+      if (r.user_id === user.id) return false; // 自己不可審核自己的單
+
+      if (r.current_step === "MANAGER") {
+        // 直屬主管審核：需為申請人的 manager_id，或是 Admin
+        const applicant = this.state.users.find(u => u.id === r.user_id);
+        return (applicant && applicant.manager_id === user.id) || isAdmin;
+      } else if (r.current_step === "HR") {
+        // 第二階 HR 雙簽：需為 Admin / HR 角色
+        return isAdmin;
+      }
+      return false;
+    });
+
+    // 銷假單待審
+    const pendingCancels = this.state.requests.filter(r => {
+      if (r.status !== "CANCEL_PENDING") return false;
+      if (r.user_id === user.id) return false;
+      const applicant = this.state.users.find(u => u.id === r.user_id);
+      return (applicant && applicant.manager_id === user.id) || isAdmin;
+    });
+
+    // 加班單待審
+    const pendingOvertimes = this.state.overtimes.filter(o => {
+      if (o.status !== "PENDING") return false;
+      if (o.user_id === user.id) return false;
+      const applicant = this.state.users.find(u => u.id === o.user_id);
+      return (applicant && applicant.manager_id === user.id) || isAdmin;
+    });
+
+    // 更新各 Tab 數量徽章
+    document.getElementById("countPendingLeaves").textContent = pendingLeaves.length;
+    document.getElementById("countPendingCancels").textContent = pendingCancels.length;
+    document.getElementById("countPendingOvertimes").textContent = pendingOvertimes.length;
+
+    // 渲染當前 Tab 內容
+    const thead = document.getElementById("approvalTableHead");
+    const tbody = document.getElementById("approvalTableBody");
+    tbody.innerHTML = "";
+
+    if (this.state.approvalTab === "leaves") {
+      thead.innerHTML = `
+        <tr>
+          <th>單號</th>
+          <th>申請人</th>
+          <th>假別</th>
+          <th>請假區間</th>
+          <th>工時</th>
+          <th>事由</th>
+          <th>審核階層</th>
+          <th>動作</th>
+        </tr>
+      `;
+
+      if (pendingLeaves.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; color: var(--text-muted); padding: 32px;">目前無任何待審核之請假申請單 🎉</td></tr>`;
+      } else {
+        pendingLeaves.forEach(req => {
+          const applicant = this.state.users.find(u => u.id === req.user_id) || { name: req.user_id, department_name: "" };
+          const typeDef = SYSTEM_CONFIG.LEAVE_TYPES.find(t => t.id === req.leave_type_id) || { name: req.leave_type_id };
+          const stepBadge = req.current_step === "HR" 
+            ? `<span class="badge badge-purple"><i class="fa-solid fa-user-shield"></i> HR 複核 (第2階)</span>` 
+            : `<span class="badge badge-blue"><i class="fa-solid fa-user-tie"></i> 主管初審 (第1階)</span>`;
+
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
+            <td><strong>${req.id}</strong></td>
+            <td>
+              <strong>${applicant.name}</strong>
+              <div style="font-size: 0.75rem; color: var(--text-muted);">${applicant.department_name}</div>
+            </td>
+            <td><span class="badge ${typeDef.badgeClass || 'badge-blue'}">${typeDef.name}</span></td>
+            <td style="font-size: 0.8rem;">
+              <div>${req.start_time}</div>
+              <div>至 ${req.end_time}</div>
+            </td>
+            <td><strong style="font-family: 'JetBrains Mono'; color: var(--primary);">${req.total_hours}</strong> h</td>
+            <td style="max-width: 180px; font-size: 0.82rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${req.reason}">${req.reason}</td>
+            <td>${stepBadge}</td>
+            <td>
+              <button class="btn btn-sm btn-primary" onclick="App.openApprovalModal('LEAVE', '${req.id}')">
+                <i class="fa-solid fa-pen-to-square"></i> 簽核
+              </button>
+            </td>
+          `;
+          tbody.appendChild(tr);
+        });
+      }
+    } else if (this.state.approvalTab === "cancels") {
+      thead.innerHTML = `
+        <tr>
+          <th>單號</th>
+          <th>申請人</th>
+          <th>假別</th>
+          <th>原請假區間</th>
+          <th>需退還時數</th>
+          <th>銷假事由</th>
+          <th>動作</th>
+        </tr>
+      `;
+
+      if (pendingCancels.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 32px;">目前無任何待審核之銷假申請單</td></tr>`;
+      } else {
+        pendingCancels.forEach(req => {
+          const applicant = this.state.users.find(u => u.id === req.user_id) || { name: req.user_id, department_name: "" };
+          const typeDef = SYSTEM_CONFIG.LEAVE_TYPES.find(t => t.id === req.leave_type_id) || { name: req.leave_type_id };
+
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
+            <td><strong>${req.id}</strong></td>
+            <td><strong>${applicant.name}</strong> (${applicant.department_name})</td>
+            <td><span class="badge ${typeDef.badgeClass || 'badge-blue'}">${typeDef.name}</span></td>
+            <td style="font-size: 0.8rem;">${req.start_time} ~ ${req.end_time}</td>
+            <td><strong style="color: var(--success); font-family: 'JetBrains Mono';">${req.total_hours}</strong> h</td>
+            <td>${req.reason}</td>
+            <td>
+              <button class="btn btn-sm btn-primary" onclick="App.openApprovalModal('CANCEL_LEAVE', '${req.id}')">
+                <i class="fa-solid fa-rotate-left"></i> 審核銷假
+              </button>
+            </td>
+          `;
+          tbody.appendChild(tr);
+        });
+      }
+    } else if (this.state.approvalTab === "overtimes") {
+      thead.innerHTML = `
+        <tr>
+          <th>單號</th>
+          <th>申報人</th>
+          <th>加班日期</th>
+          <th>時段</th>
+          <th>工時</th>
+          <th>換算補休</th>
+          <th>事由</th>
+          <th>動作</th>
+        </tr>
+      `;
+
+      if (pendingOvertimes.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; color: var(--text-muted); padding: 32px;">目前無任何待審核之加班申報單</td></tr>`;
+      } else {
+        pendingOvertimes.forEach(ot => {
+          const applicant = this.state.users.find(u => u.id === ot.user_id) || { name: ot.user_id, department_name: "" };
+
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
+            <td><strong>${ot.id}</strong></td>
+            <td><strong>${applicant.name}</strong> (${applicant.department_name})</td>
+            <td>${ot.date}</td>
+            <td>${ot.start_time} ~ ${ot.end_time}</td>
+            <td><strong>${ot.hours}</strong> h</td>
+            <td><strong style="color: var(--success); font-family: 'JetBrains Mono';">+${ot.comp_hours}</strong> h</td>
+            <td>${ot.reason}</td>
+            <td>
+              <button class="btn btn-sm btn-primary" onclick="App.openApprovalModal('OVERTIME', '${ot.id}')">
+                <i class="fa-solid fa-check"></i> 審核加班
+              </button>
+            </td>
+          `;
+          tbody.appendChild(tr);
+        });
+      }
+    } else if (this.state.approvalTab === "history") {
+      thead.innerHTML = `
+        <tr>
+          <th>歷程編號</th>
+          <th>關聯單號</th>
+          <th>類型</th>
+          <th>審核人</th>
+          <th>審核身分</th>
+          <th>決議</th>
+          <th>簽核意見 / 退回理由</th>
+          <th>簽核時間</th>
+        </tr>
+      `;
+
+      if (this.state.logs.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; color: var(--text-muted); padding: 32px;">尚無簽核歷史歷程</td></tr>`;
+      } else {
+        this.state.logs.forEach(log => {
+          const approver = this.state.users.find(u => u.id === log.approver_id) || { name: log.approver_id };
+          const statusBadge = log.status === "APPROVED" 
+            ? `<span class="badge badge-approved">核准 APPROVED</span>` 
+            : `<span class="badge badge-rejected">退回 REJECTED</span>`;
+
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
+            <td><span style="font-size: 0.78rem; color: var(--text-sub);">${log.id}</span></td>
+            <td><strong>${log.request_id}</strong></td>
+            <td><span class="badge badge-blue">${log.request_type}</span></td>
+            <td><strong>${approver.name}</strong></td>
+            <td><span style="font-size: 0.8rem; color: var(--text-muted);">${log.approver_role}</span></td>
+            <td>${statusBadge}</td>
+            <td style="font-size: 0.82rem;">${log.comment || '--'}</td>
+            <td style="font-size: 0.78rem; color: var(--text-muted);">${log.acted_at}</td>
+          `;
+          tbody.appendChild(tr);
+        });
+      }
+    }
+  },
+
+  /**
+   * 切換審核 Tab
+   */
+  switchApprovalTab(tabName, btnElem) {
+    this.state.approvalTab = tabName;
+    document.querySelectorAll(".approval-tabs .tab-btn").forEach(b => b.classList.remove("active"));
+    if (btnElem) btnElem.classList.add("active");
+    this.renderApprovalsView();
+  },
+
+  /**
+   * 開啟審核確認彈窗
+   */
+  openApprovalModal(type, id) {
+    this.state.activeActionItem = { type, id };
+    const modalBody = document.getElementById("approvalModalBody");
+    const modalTitle = document.getElementById("approvalModalTitle");
+
+    if (type === "LEAVE" || type === "CANCEL_LEAVE") {
+      const req = this.state.requests.find(r => r.id === id);
+      if (!req) return;
+      const applicant = this.state.users.find(u => u.id === req.user_id) || { name: req.user_id, department_name: "" };
+      const typeDef = SYSTEM_CONFIG.LEAVE_TYPES.find(t => t.id === req.leave_type_id) || { name: req.leave_type_id };
+
+      modalTitle.textContent = type === "LEAVE" ? "請假申請單簽核" : "銷假退還額度審核";
+      modalBody.innerHTML = `
+        <div style="display: flex; flex-direction: column; gap: 14px; font-size: 0.9rem;">
+          <div style="padding: 12px; background: #f8fafc; border-radius: var(--radius-md); display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+            <div>申請人員：<strong>${applicant.name}</strong> (${applicant.department_name})</div>
+            <div>申請假別：<span class="badge ${typeDef.badgeClass || 'badge-blue'}">${typeDef.name}</span></div>
+            <div>請假起訖：<strong>${req.start_time}</strong> 至 <strong>${req.end_time}</strong></div>
+            <div>扣除工時：<strong style="color: var(--primary); font-family: 'JetBrains Mono';">${req.total_hours} 小時</strong></div>
+          </div>
+          <div>
+            <strong>事由說明：</strong>
+            <p style="color: var(--text-muted); margin-top: 4px; background: #fafafa; padding: 8px 12px; border-radius: 6px;">${req.reason || '無'}</p>
+          </div>
+          ${req.attachment_url ? `
+            <div>
+              <strong>附件證明：</strong>
+              <a href="${req.attachment_url}" target="_blank" style="color: var(--primary); text-decoration: underline; margin-left: 8px;">
+                <i class="fa-solid fa-paperclip"></i> 查看證明文件 / 圖片連結
+              </a>
+            </div>
+          ` : ''}
+          <div class="form-group">
+            <label class="form-label">簽核意見 / 退回原因 <span style="color: var(--danger); font-size: 0.75rem;">(若退回則必填)</span></label>
+            <textarea class="form-control" id="approvalModalComment" rows="3" placeholder="請輸入審核意見 (如：准假、同意銷假、或退回之具體理由)..."></textarea>
+          </div>
+        </div>
+      `;
+    } else if (type === "OVERTIME") {
+      const ot = this.state.overtimes.find(o => o.id === id);
+      if (!ot) return;
+      const applicant = this.state.users.find(u => u.id === ot.user_id) || { name: ot.user_id, department_name: "" };
+
+      modalTitle.textContent = "加班申報與補休換算審核";
+      modalBody.innerHTML = `
+        <div style="display: flex; flex-direction: column; gap: 14px; font-size: 0.9rem;">
+          <div style="padding: 12px; background: #f8fafc; border-radius: var(--radius-md); display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+            <div>申報人員：<strong>${applicant.name}</strong> (${applicant.department_name})</div>
+            <div>加班日期：<strong>${ot.date}</strong></div>
+            <div>加班時段：${ot.start_time} ~ ${ot.end_time}</div>
+            <div>申報工時：<strong>${ot.hours} 小時</strong></div>
+            <div>換算倍率：<strong>${ot.comp_rate}x</strong></div>
+            <div>發放補休：<strong style="color: var(--success); font-family: 'JetBrains Mono';">+${ot.comp_hours} 小時</strong></div>
+          </div>
+          <div>
+            <strong>加班工作內容：</strong>
+            <p style="color: var(--text-muted); margin-top: 4px; background: #fafafa; padding: 8px 12px; border-radius: 6px;">${ot.reason || '無'}</p>
+          </div>
+          <div class="form-group">
+            <label class="form-label">簽核意見 / 退回原因</label>
+            <textarea class="form-control" id="approvalModalComment" rows="3" placeholder="請輸入審核意見..."></textarea>
+          </div>
+        </div>
+      `;
+    }
+
+    document.getElementById("approvalModal").classList.add("active");
+  },
+
+  /**
+   * 執行審核動作 (同意 / 退回)
+   */
+  async submitApprovalAction(isApprove) {
+    if (!this.state.activeActionItem) return;
+    const { type, id } = this.state.activeActionItem;
+    const comment = document.getElementById("approvalModalComment").value.trim();
+    const user = this.state.currentUser;
+
+    if (!isApprove && !comment) {
+      this.showToast("退回申請時必須填寫退回原因！", "error");
+      return;
+    }
+
+    let res = null;
+    if (type === "LEAVE" || type === "CANCEL_LEAVE") {
+      res = await ApiService.reviewLeave({ requestId: id, approverId: user.id, comment }, isApprove);
+    } else if (type === "OVERTIME") {
+      res = await ApiService.reviewOvertime({ overtimeId: id, approverId: user.id, comment }, isApprove);
+    }
+
+    if (res && res.success) {
+      this.showToast(res.message, "success");
+      this.closeModal("approvalModal");
+      await this.loadData(user.id);
+      this.renderApprovalsView();
+      this.updatePendingBadges();
+    } else {
+      this.showToast(res ? res.message : "操作失敗", "error");
+    }
+  },
+
+  /**
+   * 5. 撤銷 / 銷假彈窗觸發
+   */
+  handleCancelClick(requestId, currentStatus) {
+    this.state.activeActionItem = { requestId, currentStatus };
+    const modalPrompt = document.getElementById("cancelModalPrompt");
+    const modalTitle = document.getElementById("cancelModalTitle");
+    const reasonInput = document.getElementById("cancelReasonInput");
+    reasonInput.value = "";
+
+    if (currentStatus === "PENDING") {
+      modalTitle.textContent = "撤銷請假申請";
+      modalPrompt.innerHTML = `確定要撤銷請假單 <strong>${requestId}</strong> 嗎？<br>撤銷後系統將<strong>立即釋放鎖定之額度</strong>。`;
+    } else if (currentStatus === "APPROVED") {
+      modalTitle.textContent = "送出銷假申請";
+      modalPrompt.innerHTML = `請假單 <strong>${requestId}</strong> 已核准。<br>送出銷假申請後需經主管/人資審核，審核通過將<strong>全數退還已扣除之假別額度</strong>。`;
+    }
+
+    document.getElementById("cancelModal").classList.add("active");
+  },
+
+  async executeCancelLeave() {
+    if (!this.state.activeActionItem) return;
+    const { requestId } = this.state.activeActionItem;
+    const user = this.state.currentUser;
+    const reason = document.getElementById("cancelReasonInput").value.trim();
+
+    if (!reason) {
+      this.showToast("請填寫撤銷/銷假事由說明！", "error");
+      return;
+    }
+
+    const res = await ApiService.cancelLeave({
+      requestId,
+      userId: user.id,
+      cancelReason: reason
+    });
+
+    if (res.success) {
+      this.showToast(res.message, "success");
+      this.closeModal("cancelModal");
+      await this.loadData(user.id);
+      this.renderDashboard();
+    } else {
+      this.showToast(res.message, "error");
+    }
+  },
+
+  /**
+   * 6. 差勤行事曆 (Calendar View)
+   */
+  renderCalendar() {
+    const year = this.state.calendarYear;
+    const month = this.state.calendarMonth; // 0-indexed
+
+    const monthNames = ["1月", "2月", "3月", "4月", "5月", "6月", "7月", "8月", "9月", "10月", "11月", "12月"];
+    document.getElementById("calendarMonthTitle").textContent = `${year} 年 ${monthNames[month]}`;
+
+    const grid = document.getElementById("calendarDaysGrid");
+    grid.innerHTML = "";
+
+    // 取得當月第 1 天是星期幾、當月天數
+    const firstDayIndex = new Date(year, month, 1).getDay(); // 0 (Sun) - 6 (Sat)
+    const totalDays = new Date(year, month + 1, 0).getDate();
+    const prevMonthDays = new Date(year, month, 0).getDate();
+
+    // 建立 2026 國定假日 Map
+    const holidayMap = {};
+    this.state.holidays.forEach(h => {
+      holidayMap[h.date] = h;
+    });
+
+    // 建立請假單 Map (依權限嚴格過濾：管理者看全體、直屬主管看部屬與自己、一般員工僅看自己)
+    const currentUser = this.state.currentUser;
+    const isAdmin = currentUser && (currentUser.role === "Admin" || currentUser.role === "HR");
+    const isManager = currentUser && (currentUser.role === "Manager" || currentUser.role === "Admin" || currentUser.role === "HR");
+
+    const activeLeaves = this.state.requests.filter(r => {
+      if (r.status !== "APPROVED" && r.status !== "PENDING") return false;
+      if (isAdmin) return true;
+      if (r.user_id === currentUser.id) return true;
+      if (isManager) {
+        const applicant = this.state.users.find(u => u.id === r.user_id);
+        return applicant && applicant.manager_id === currentUser.id;
+      }
+      return false;
+    });
+
+    // 1. 上個月尾巴天數
+    for (let i = firstDayIndex - 1; i >= 0; i--) {
+      const cell = document.createElement("div");
+      cell.className = "calendar-day-cell other-month";
+      cell.innerHTML = `<div class="day-number">${prevMonthDays - i}</div>`;
+      grid.appendChild(cell);
+    }
+
+    // 2. 當月天數
+    const todayStr = LeaveEngine.formatDateOnly(new Date());
+    for (let day = 1; day <= totalDays; day++) {
+      const dateStr = `${year}-${("0" + (month + 1)).slice(-2)}-${("0" + day).slice(-2)}`;
+      const dayOfWeek = new Date(year, month, day).getDay();
+      const isWeekend = (dayOfWeek === 0 || dayOfWeek === 6);
+      const isToday = (dateStr === todayStr);
+
+      const cell = document.createElement("div");
+      let cellClasses = "calendar-day-cell";
+      if (isWeekend) cellClasses += " weekend";
+      if (isToday) cellClasses += " today";
+      cell.className = cellClasses;
+
+      // 國定假日標記
+      let holidayTag = "";
+      if (holidayMap[dateStr]) {
+        holidayTag = `<span class="holiday-tag">${holidayMap[dateStr].name}</span>`;
+      }
+
+      let eventsHtml = "";
+      // 搜尋當天請假的同仁
+      activeLeaves.forEach(req => {
+        const reqStart = req.start_time.substring(0, 10);
+        const reqEnd = req.end_time.substring(0, 10);
+
+        if (dateStr >= reqStart && dateStr <= reqEnd) {
+          const emp = this.state.users.find(u => u.id === req.user_id) || { name: req.user_id };
+          const typeDef = SYSTEM_CONFIG.LEAVE_TYPES.find(t => t.id === req.leave_type_id) || { name: req.leave_type_id };
+          eventsHtml += `
+            <div class="calendar-event-pill" title="${emp.name} - ${typeDef.name} (${req.total_hours}h)">
+              ${emp.name}: ${typeDef.name}
+            </div>
+          `;
+        }
+      });
+
+      cell.innerHTML = `
+        <div class="day-number">
+          <span>${day}</span>
+          ${holidayTag}
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 2px; overflow-y: auto;">
+          ${eventsHtml}
+        </div>
+      `;
+      grid.appendChild(cell);
+    }
+  },
+
+  changeCalendarMonth(delta) {
+    this.state.calendarMonth += delta;
+    if (this.state.calendarMonth > 11) {
+      this.state.calendarMonth = 0;
+      this.state.calendarYear += 1;
+    } else if (this.state.calendarMonth < 0) {
+      this.state.calendarMonth = 11;
+      this.state.calendarYear -= 1;
+    }
+    this.renderCalendar();
+  },
+
+  resetCalendarToday() {
+    const now = new Date();
+    this.state.calendarYear = now.getFullYear();
+    this.state.calendarMonth = now.getMonth();
+    this.renderCalendar();
+  },
+
+  /**
+   * 7. 系統設定 (Settings) - 僅管理者權限可存取
+   */
+  renderSettings() {
+    const user = this.state.currentUser;
+    const isAdmin = user && (user.role === "Admin" || user.role === "HR");
+
+    if (!isAdmin) {
+      this.showToast("權限不足：系統設定專區僅限管理者 (Admin) 存取！", "error");
+      this.navigate("dashboard");
+      return;
+    }
+
+    const gasCard = document.getElementById("settingsGasCard");
+    if (gasCard) {
+      gasCard.style.display = "block";
+      document.getElementById("settingsGasUrl").value = ApiService.getGasUrl();
+    }
+
+    // 渲染全員到職日與特休列表
+    const tbody = document.getElementById("employeeSeniorityTableBody");
+    if (!tbody) return;
+    tbody.innerHTML = "";
+
+    const year = SYSTEM_CONFIG.CURRENT_YEAR || 2026;
+
+    this.state.users.forEach(u => {
+      const hireDate = u.hire_date ? LeaveEngine.formatDateOnly(u.hire_date) : "2024-03-01";
+      const stat = LeaveEngine.calculateStatutoryAnnualLeave(hireDate);
+      const bal = this.state.balances.find(b => b.user_id === u.id && b.leave_type_id === "ANNUAL" && String(b.year) === String(year));
+      const currentBalHours = bal ? bal.total_hours : 0;
+      const isSynced = (currentBalHours === stat.hours);
+
+      const isSelf = (u.id === user.id);
+      const actionHtml = isSelf
+        ? `<span style="font-size: 0.78rem; color: var(--text-muted); font-style: italic;"><i class="fa-solid fa-user-shield"></i> 當前登入者</span>`
+        : `<button class="btn btn-sm btn-secondary" style="color: var(--danger); padding: 3px 8px; font-size: 0.78rem;" onclick="App.confirmDeleteUser('${u.id}', '${u.name}')" title="刪除員工資料與假別額度">
+            <i class="fa-solid fa-trash-can"></i> 刪除
+          </button>`;
+
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td><strong style="color: var(--primary); font-family: 'JetBrains Mono';">${u.id}</strong></td>
+        <td><strong class="name-cell" style="display: inline-block; min-width: 5.5em; white-space: nowrap; font-size: 0.92rem;">${u.name}</strong></td>
+        <td>${u.department_name || u.department_id} · <span class="badge badge-blue">${u.role}</span></td>
+        <td>
+          <input type="date" class="form-control" style="width: 145px; padding: 4px 8px; font-size: 0.85rem;" value="${hireDate}" onchange="App.handleUserHireDateChange('${u.id}', this.value)" ${isAdmin ? '' : 'disabled'}>
+        </td>
+        <td><span class="badge" style="background: #f1f5f9; color: var(--text-main); font-weight: 600;">${stat.seniorityText || "未滿半年"}</span></td>
+        <td><strong style="color: #15803d; font-size: 0.95rem;">${stat.days}</strong> 天</td>
+        <td><strong style="color: var(--primary); font-family: 'JetBrains Mono';">${stat.hours}</strong> 小時</td>
+        <td>
+          <span class="badge ${isSynced ? 'badge-approved' : 'badge-pending'}" title="${isSynced ? '已完成法定特休同步' : '待同步'}">
+            <i class="fa-solid ${isSynced ? 'fa-check' : 'fa-triangle-exclamation'}"></i> ${currentBalHours}h
+          </span>
+        </td>
+        <td>${actionHtml}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+  },
+
+  confirmDeleteUser(userId, userName) {
+    this.state.activeDeleteUserId = userId;
+    const promptEl = document.getElementById("deleteUserPrompt");
+    if (promptEl) {
+      promptEl.innerHTML = `您確定要將員工 <strong>${userName} (${userId})</strong> 從系統與試算表中刪除嗎？<br>刪除後將一併清除該同仁之所有特休與假別額度紀錄。`;
+    }
+    const modal = document.getElementById("deleteUserModal");
+    if (modal) modal.classList.add("active");
+  },
+
+  async executeDeleteUser() {
+    const userId = this.state.activeDeleteUserId;
+    if (!userId) return;
+
+    this.showToast(`正在刪除員工 ${userId}...`, "info");
+    const res = await ApiService.callApi("adminDeleteUser", { id: userId });
+
+    if (res.success) {
+      this.showToast(res.message, "success");
+      this.closeModal("deleteUserModal");
+      this.state.activeDeleteUserId = null;
+      await this.loadData();
+      this.renderSettings();
+      this.renderDashboard();
+    } else {
+      this.showToast(res.message, "error");
+    }
+  },
+
+  async handleUserHireDateChange(userId, newHireDate) {
+    this.showToast(`正在更新員工 ${userId} 到職日並重算特休...`, "info");
+    const res = await ApiService.callApi("adminUpdateUser", { id: userId, hire_date: newHireDate });
+    if (res.success) {
+      this.showToast(res.message, "success");
+      await this.loadData();
+      this.renderSettings();
+      this.renderDashboard();
+    } else {
+      this.showToast(res.message, "error");
+    }
+  },
+
+  openAddUserModal() {
+    const modal = document.getElementById("addUserModal");
+    if (!modal) return;
+    document.getElementById("newUserName").value = "";
+    document.getElementById("newUserId").value = "";
+    document.getElementById("newUserEmail").value = "";
+    document.getElementById("newUserHireDate").value = LeaveEngine.formatDateOnly(new Date());
+    document.getElementById("newUserPassword").value = "123456";
+    this.previewNewUserAnnualLeave();
+    modal.classList.add("active");
+  },
+
+  previewNewUserAnnualLeave() {
+    const hireDate = document.getElementById("newUserHireDate").value;
+    const previewEl = document.getElementById("newUserAnnualPreview");
+    if (!hireDate) {
+      if (previewEl) previewEl.textContent = "請選擇到職日，系統將依勞基法第38條自動核算特休額度...";
+      return;
+    }
+    const stat = LeaveEngine.calculateStatutoryAnnualLeave(hireDate);
+    if (previewEl) {
+      previewEl.innerHTML = `<strong>勞基法核算法定特休：</strong>年資 ${stat.seniorityText || "0"}，核發 <strong style="color: #15803d;">${stat.days} 天 (${stat.hours} 小時)</strong> 特別休假，將自動建立 ANNUAL 額度。`;
+    }
+  },
+
+  async handleAddUserSubmit(event) {
+    event.preventDefault();
+    const name = document.getElementById("newUserName").value.trim();
+    const id = document.getElementById("newUserId").value.trim();
+    const email = document.getElementById("newUserEmail").value.trim();
+    const department_name = document.getElementById("newUserDept").value;
+    const manager_id = document.getElementById("newUserManager").value;
+    const role = document.getElementById("newUserRole").value;
+    const hire_date = document.getElementById("newUserHireDate").value;
+    const password = document.getElementById("newUserPassword").value.trim() || "123456";
+
+    this.showToast(`正在建立員工 ${name} 並初始化假別額度...`, "info");
+
+    const res = await ApiService.callApi("adminCreateUser", {
+      id,
+      name,
+      email,
+      department_name,
+      manager_id,
+      role,
+      hire_date,
+      password
+    });
+
+    if (res.success) {
+      this.showToast(res.message, "success");
+      this.closeModal("addUserModal");
+      await this.loadData();
+      this.renderSettings();
+      this.renderDashboard();
+    } else {
+      this.showToast(res.message, "error");
+    }
+  },
+
+  async syncAllAnnualLeaves() {
+    this.showToast("正在同步全體員工法定特休至 Google Sheet...", "info");
+    const res = await ApiService.callApi("syncStatutoryAnnualLeaves");
+    if (res.success) {
+      this.showToast(res.message || "法定特休額度已全數同步至 leave_balances 表！", "success");
+      await this.loadData();
+      this.renderSettings();
+      this.renderDashboard();
+    } else {
+      this.showToast(res.message || "同步失敗，請確認連線", "error");
+    }
+  },
+
+  async syncHolidays() {
+    this.showToast("正在同步 2026-2030 國定假日至 Google Sheet / 資料庫...", "info");
+    const res = await ApiService.callApi("syncHolidays");
+    if (res.success) {
+      this.showToast(res.message || "2026-2030 國定假日已全數同步至 holidays 分頁！", "success");
+      await this.loadData();
+      this.renderCalendar();
+    } else {
+      this.showToast(res.message || "同步失敗，請確認連線", "error");
+    }
+  },
+
+  async saveGasSettings() {
+    const url = document.getElementById("settingsGasUrl").value.trim();
+    if (!url) {
+      this.showToast("請輸入 Google Apps Script 網址！", "error");
+      return;
+    }
+    ApiService.setGasUrl(url);
+    ApiService.setUseRemoteGas(true);
+    this.showToast("設定已儲存！正在測試連線...", "info");
+
+    const testRes = await ApiService.testGasConnection(url);
+    if (testRes.success) {
+      this.showToast("Google Sheet 雲端連線成功！", "success");
+      await this.loadData();
+      this.renderHeader();
+      this.navigate("dashboard");
+    } else {
+      this.showToast(testRes.message, "error");
+      ApiService.setUseRemoteGas(false);
+      this.renderHeader();
+    }
+  },
+
+  async testGasConnection() {
+    const url = document.getElementById("settingsGasUrl").value.trim();
+    this.showToast("連線測試中...", "info");
+    const testRes = await ApiService.testGasConnection(url);
+    if (testRes.success) {
+      this.showToast("連線成功！Google Apps Script 後端回應正常。", "success");
+    } else {
+      this.showToast(testRes.message, "error");
+    }
+  },
+
+  switchToMockMode() {
+    ApiService.setUseRemoteGas(false);
+    this.showToast("已切換為【本機展示資料庫模式】", "success");
+    this.renderHeader();
+    this.navigate("dashboard");
+  },
+
+  resetDatabase() {
+    if (confirm("確定要重設本機資料庫嗎？所有自訂請假與加班單將還原至初始範例。")) {
+      ApiService.resetMockData();
+      this.showToast("本機資料庫已成功重設！", "success");
+      this.loadData().then(() => this.navigate("dashboard"));
+    }
+  },
+
+  openModal(modalId) {
+    const modal = document.getElementById(modalId);
+    if (modal) modal.classList.add("active");
+  },
+
+  closeModal(modalId) {
+    const modal = document.getElementById(modalId);
+    if (modal) modal.classList.remove("active");
+  },
+
+  /**
+   * 工具：狀態標籤 HTML
+   */
+  getStatusBadgeHtml(status, step) {
+    switch (status) {
+      case "PENDING":
+        return step === "HR" 
+          ? `<span class="badge badge-pending"><i class="fa-solid fa-hourglass-half"></i> HR 複核中</span>` 
+          : `<span class="badge badge-pending"><i class="fa-solid fa-hourglass-half"></i> 主管審核中</span>`;
+      case "APPROVED":
+        return `<span class="badge badge-approved"><i class="fa-solid fa-circle-check"></i> 已核准</span>`;
+      case "REJECTED":
+        return `<span class="badge badge-rejected"><i class="fa-solid fa-circle-xmark"></i> 已退回</span>`;
+      case "CANCELLED":
+        return `<span class="badge badge-cancelled"><i class="fa-solid fa-ban"></i> 已撤銷</span>`;
+      case "CANCEL_PENDING":
+        return `<span class="badge badge-cancel-pending"><i class="fa-solid fa-rotate-left"></i> 銷假審核中</span>`;
+      case "CANCEL_APPROVED":
+        return `<span class="badge badge-slate"><i class="fa-solid fa-check-double"></i> 銷假完成 (已退額)</span>`;
+      default:
+        return `<span class="badge badge-slate">${status}</span>`;
+    }
+  },
+
+  /**
+   * 工具：主管警示橫幅與導航 Badge 計算
+   */
+  checkManagerAlert() {
+    const user = this.state.currentUser;
+    const isManager = (user.role === "Manager" || user.role === "Admin");
+    const isAdmin = (user.role === "Admin");
+
+    let count = 0;
+    this.state.requests.forEach(r => {
+      if (r.user_id === user.id) return;
+      if (r.status === "PENDING") {
+        const applicant = this.state.users.find(u => u.id === r.user_id);
+        if (r.current_step === "MANAGER" && ((applicant && applicant.manager_id === user.id) || isAdmin)) count++;
+        if (r.current_step === "HR" && isAdmin) count++;
+      } else if (r.status === "CANCEL_PENDING") {
+        const applicant = this.state.users.find(u => u.id === r.user_id);
+        if ((applicant && applicant.manager_id === user.id) || isAdmin) count++;
+      }
+    });
+
+    this.state.overtimes.forEach(o => {
+      if (o.user_id === user.id) return;
+      if (o.status === "PENDING") {
+        const applicant = this.state.users.find(u => u.id === o.user_id);
+        if ((applicant && applicant.manager_id === user.id) || isAdmin) count++;
+      }
+    });
+
+    const banner = document.getElementById("managerAlertBanner");
+    if (isManager && count > 0) {
+      banner.style.display = "flex";
+      document.getElementById("bannerPendingCount").textContent = count;
+    } else {
+      banner.style.display = "none";
+    }
+  },
+
+  updatePendingBadges() {
+    const user = this.state.currentUser;
+    const isManager = (user.role === "Manager" || user.role === "Admin");
+    const isAdmin = (user.role === "Admin");
+
+    let count = 0;
+    this.state.requests.forEach(r => {
+      if (r.user_id === user.id) return;
+      if (r.status === "PENDING") {
+        const applicant = this.state.users.find(u => u.id === r.user_id);
+        if (r.current_step === "MANAGER" && ((applicant && applicant.manager_id === user.id) || isAdmin)) count++;
+        if (r.current_step === "HR" && isAdmin) count++;
+      } else if (r.status === "CANCEL_PENDING") {
+        const applicant = this.state.users.find(u => u.id === r.user_id);
+        if ((applicant && applicant.manager_id === user.id) || isAdmin) count++;
+      }
+    });
+
+    this.state.overtimes.forEach(o => {
+      if (o.user_id === user.id) return;
+      if (o.status === "PENDING") {
+        const applicant = this.state.users.find(u => u.id === o.user_id);
+        if ((applicant && applicant.manager_id === user.id) || isAdmin) count++;
+      }
+    });
+
+    const badge = document.getElementById("pendingApprovalBadge");
+    if (isManager && count > 0) {
+      badge.style.display = "inline-block";
+      badge.textContent = count;
+    } else {
+      badge.style.display = "none";
+    }
+
+    // 系統設定選單與快捷按鈕僅管理者 (Admin) 顯示
+    const navSettings = document.getElementById("navSettings");
+    if (navSettings) {
+      navSettings.style.display = isAdmin ? "flex" : "none";
+    }
+    const sidebarSettingsBtn = document.getElementById("sidebarSettingsBtn");
+    if (sidebarSettingsBtn) {
+      sidebarSettingsBtn.style.display = isAdmin ? "inline-flex" : "none";
+    }
+  },
+
+  /**
+   * 8. 個人差勤歷史紀錄與匯出 (Leave History & Export)
+   */
+  renderHistory() {
+    const user = this.state.currentUser;
+    if (!user) return;
+
+    // 初始化假別下拉選單
+    const typeSelect = document.getElementById("historyFilterLeaveType");
+    if (typeSelect && typeSelect.options.length <= 1) {
+      typeSelect.innerHTML = `<option value="ALL">全部假別 (All Types)</option>`;
+      this.state.leaveTypes.forEach(t => {
+        const opt = document.createElement("option");
+        opt.value = t.id;
+        opt.textContent = t.name;
+        typeSelect.appendChild(opt);
+      });
+    }
+
+    // 預設篩選區間 (今年 2026-01-01 ~ 2026-12-31)
+    if (!document.getElementById("historyFilterStartDate").value) {
+      const year = SYSTEM_CONFIG.CURRENT_YEAR || 2026;
+      document.getElementById("historyFilterStartDate").value = `${year}-01-01`;
+      document.getElementById("historyFilterEndDate").value = `${year}-12-31`;
+    }
+
+    this.applyHistoryFilter();
+  },
+
+  setHistoryPresetRange(preset) {
+    const today = new Date();
+    const todayStr = LeaveEngine.formatDateOnly(today);
+    const startInput = document.getElementById("historyFilterStartDate");
+    const endInput = document.getElementById("historyFilterEndDate");
+
+    switch (preset) {
+      case "this_month": {
+        const y = today.getFullYear();
+        const m = ("0" + (today.getMonth() + 1)).slice(-2);
+        const lastDay = new Date(y, today.getMonth() + 1, 0).getDate();
+        startInput.value = `${y}-${m}-01`;
+        endInput.value = `${y}-${m}-${lastDay}`;
+        break;
+      }
+      case "this_year": {
+        const y = today.getFullYear();
+        startInput.value = `${y}-01-01`;
+        endInput.value = `${y}-12-31`;
+        break;
+      }
+      case "last_3_months": {
+        const start = new Date(today);
+        start.setMonth(start.getMonth() - 3);
+        startInput.value = LeaveEngine.formatDateOnly(start);
+        endInput.value = todayStr;
+        break;
+      }
+      case "all": {
+        startInput.value = "";
+        endInput.value = "";
+        break;
+      }
+    }
+    this.applyHistoryFilter();
+  },
+
+  resetHistoryFilter() {
+    document.getElementById("historyFilterLeaveType").value = "ALL";
+    document.getElementById("historyFilterStatus").value = "ALL";
+    document.getElementById("historyFilterStartDate").value = "";
+    document.getElementById("historyFilterEndDate").value = "";
+    document.getElementById("historyFilterKeyword").value = "";
+    this.applyHistoryFilter();
+  },
+
+  getFilteredHistoryRequests() {
+    const user = this.state.currentUser;
+    if (!user) return [];
+
+    const typeFilter = document.getElementById("historyFilterLeaveType") ? document.getElementById("historyFilterLeaveType").value : "ALL";
+    const statusFilter = document.getElementById("historyFilterStatus") ? document.getElementById("historyFilterStatus").value : "ALL";
+    const startDate = document.getElementById("historyFilterStartDate") ? document.getElementById("historyFilterStartDate").value : "";
+    const endDate = document.getElementById("historyFilterEndDate") ? document.getElementById("historyFilterEndDate").value : "";
+    const keyword = document.getElementById("historyFilterKeyword") ? document.getElementById("historyFilterKeyword").value.trim().toLowerCase() : "";
+
+    return this.state.requests.filter(req => {
+      // 僅顯示當前使用者
+      if (req.user_id !== user.id) return false;
+
+      // 假別篩選
+      if (typeFilter !== "ALL" && req.leave_type_id !== typeFilter) return false;
+
+      // 狀態篩選
+      if (statusFilter !== "ALL" && req.status !== statusFilter) return false;
+
+      // 日期區間篩選 (以請假開始時間比對)
+      const reqDate = req.start_time ? req.start_time.substring(0, 10) : "";
+      if (startDate && reqDate < startDate) return false;
+      if (endDate && reqDate > endDate) return false;
+
+      // 關鍵字搜尋 (單號、事由)
+      if (keyword) {
+        const idMatch = req.id && req.id.toLowerCase().includes(keyword);
+        const reasonMatch = req.reason && req.reason.toLowerCase().includes(keyword);
+        if (!idMatch && !reasonMatch) return false;
+      }
+
+      return true;
+    });
+  },
+
+  applyHistoryFilter() {
+    const filtered = this.getFilteredHistoryRequests();
+    const tbody = document.getElementById("historyTableBody");
+    if (!tbody) return;
+
+    tbody.innerHTML = "";
+
+    // 計算統計摘要
+    let totalCount = filtered.length;
+    let totalHours = 0;
+    let approvedHours = 0;
+    let pendingHours = 0;
+    const typeDistribution = {};
+
+    filtered.forEach(req => {
+      const h = parseFloat(req.total_hours) || 0;
+      totalHours += h;
+      if (req.status === "APPROVED") approvedHours += h;
+      if (req.status === "PENDING") pendingHours += h;
+
+      typeDistribution[req.leave_type_id] = (typeDistribution[req.leave_type_id] || 0) + h;
+    });
+
+    // 更新指標卡片
+    document.getElementById("historyStatCount").textContent = `${totalCount} 筆`;
+    document.getElementById("historyStatHours").textContent = `${totalHours.toFixed(1)} h (${(totalHours / 8.0).toFixed(1)} 天)`;
+    document.getElementById("historyStatApprovedHours").textContent = `${approvedHours.toFixed(1)} h`;
+    document.getElementById("historyStatPendingHours").textContent = `${pendingHours.toFixed(1)} h`;
+
+    // 假別分佈小標籤
+    const distContainer = document.getElementById("historyTypeDistribution");
+    if (distContainer) {
+      distContainer.innerHTML = "";
+      Object.keys(typeDistribution).forEach(typeId => {
+        const typeDef = SYSTEM_CONFIG.LEAVE_TYPES.find(t => t.id === typeId) || { name: typeId };
+        const badge = document.createElement("span");
+        badge.className = `badge ${typeDef.badgeClass || 'badge-blue'}`;
+        badge.style.fontSize = "0.78rem";
+        badge.textContent = `${typeDef.name}: ${typeDistribution[typeId]}h`;
+        distContainer.appendChild(badge);
+      });
+    }
+
+    // 渲染表格內容
+    if (filtered.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="10" style="text-align: center; color: var(--text-muted); padding: 32px;"><i class="fa-solid fa-inbox" style="font-size: 1.8rem; margin-bottom: 8px; display: block;"></i>無符合篩選條件的差勤紀錄</td></tr>`;
+      return;
+    }
+
+    filtered.forEach(req => {
+      const typeDef = SYSTEM_CONFIG.LEAVE_TYPES.find(t => t.id === req.leave_type_id) || { name: req.leave_type_id };
+      const statusBadge = this.getStatusBadgeHtml(req.status, req.current_step);
+      const isPaid = typeDef.isPaid;
+
+      let actionBtn = "";
+      if (req.status === "PENDING") {
+        actionBtn = `<button class="btn btn-sm btn-secondary" style="color: var(--danger); padding: 3px 8px;" onclick="App.handleCancelClick('${req.id}', 'PENDING')">
+          <i class="fa-solid fa-xmark"></i> 撤銷
+        </button>`;
+      } else if (req.status === "APPROVED") {
+        actionBtn = `<button class="btn btn-sm btn-secondary" style="color: var(--purple); padding: 3px 8px;" onclick="App.handleCancelClick('${req.id}', 'APPROVED')">
+          <i class="fa-solid fa-arrow-rotate-left"></i> 銷假
+        </button>`;
+      } else {
+        actionBtn = `<span style="color: var(--text-muted); font-size: 0.8rem;">-</span>`;
+      }
+
+      const attachHtml = req.attachment_url ? `<a href="${req.attachment_url}" target="_blank" class="btn btn-sm btn-secondary" style="padding: 2px 6px; font-size: 0.75rem;"><i class="fa-solid fa-paperclip"></i> 檢視</a>` : `<span style="color: var(--text-muted); font-size: 0.78rem;">無</span>`;
+
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td><strong style="color: var(--primary); font-family: 'JetBrains Mono';">${req.id}</strong></td>
+        <td><span class="badge ${typeDef.badgeClass || 'badge-blue'}">${typeDef.name}</span></td>
+        <td><span class="badge ${isPaid ? 'badge-blue' : 'badge-amber'}">${isPaid ? '全薪' : '不支薪'}</span></td>
+        <td>
+          <div style="font-weight: 500;">${req.start_time}</div>
+          <div style="font-size: 0.8rem; color: var(--text-muted);">至 ${req.end_time}</div>
+        </td>
+        <td><strong style="color: var(--text-main); font-family: 'JetBrains Mono'; font-size: 0.95rem;">${req.total_hours}</strong> 小時</td>
+        <td style="max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${req.reason || ''}">${req.reason || '-'}</td>
+        <td>${attachHtml}</td>
+        <td>${statusBadge}</td>
+        <td style="font-size: 0.8rem; color: var(--text-muted);">${req.applied_at || '-'}</td>
+        <td>${actionBtn}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+  },
+
+  exportHistoryCsv() {
+    const user = this.state.currentUser;
+    if (!user) return;
+
+    const filtered = this.getFilteredHistoryRequests();
+    if (filtered.length === 0) {
+      this.showToast("目前篩選條件下無任何紀錄可供匯出！", "warning");
+      return;
+    }
+
+    // 準備 CSV Header 與資料列 (加入 UTF-8 BOM 避免 Excel 亂碼)
+    const headers = ["單號", "申請人姓名", "員工編號", "所屬部門", "假別名稱", "薪資給付屬性", "請假開始時間", "請假結束時間", "請假工時(小時)", "申請事由", "審核狀態", "審核階層", "申請時間"];
+    
+    const rows = filtered.map(req => {
+      const typeDef = SYSTEM_CONFIG.LEAVE_TYPES.find(t => t.id === req.leave_type_id) || { name: req.leave_type_id };
+      const statusText = req.status === "APPROVED" ? "已核准" : (req.status === "PENDING" ? "待審核" : (req.status === "REJECTED" ? "已駁回" : "已撤銷/銷假"));
+      return [
+        req.id,
+        user.name,
+        user.id,
+        user.department_name || user.department_id,
+        typeDef.name,
+        typeDef.isPaid ? "全薪" : "不支薪",
+        req.start_time,
+        req.end_time,
+        req.total_hours,
+        `"${(req.reason || '').replace(/"/g, '""')}"`,
+        statusText,
+        req.current_step || "",
+        req.applied_at || ""
+      ];
+    });
+
+    let csvContent = "\uFEFF" + headers.join(",") + "\n" + rows.map(r => r.join(",")).join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    const dateStr = LeaveEngine.formatDateOnly(new Date()).replace(/-/g, "");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `個人請假歷史紀錄_${user.name}_${user.id}_${dateStr}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    this.showToast(`已成功匯出 ${filtered.length} 筆請假歷史紀錄為 CSV 報表！`, "success");
+  },
+
+  closeModal(modalId) {
+    const modal = document.getElementById(modalId);
+    if (modal) modal.classList.remove("active");
+  },
+
+  /**
+   * Toast 輕量提示
+   */
+  showToast(message, type = "info") {
+    const container = document.getElementById("toastContainer");
+    const toast = document.createElement("div");
+    toast.className = `toast ${type}`;
+
+    let icon = "fa-circle-info";
+    if (type === "success") icon = "fa-circle-check";
+    if (type === "error") icon = "fa-circle-exclamation";
+
+    toast.innerHTML = `<i class="fa-solid ${icon}"></i> <span>${message}</span>`;
+    container.appendChild(toast);
+
+    setTimeout(() => {
+      toast.style.opacity = "0";
+      toast.style.transform = "translateX(30px)";
+      toast.style.transition = "all 0.3s ease";
+      setTimeout(() => toast.remove(), 300);
+    }, 3800);
+  }
+};
+
+// 視窗載入完成後啟動
+window.addEventListener("DOMContentLoaded", () => {
+  App.init();
+});
