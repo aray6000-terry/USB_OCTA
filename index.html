@@ -690,7 +690,56 @@
                     </div>
                   </div>
                   <div class="type-checkbox-group" id="historyLeaveTypeCheckboxes">
-                    <!-- JS 動態產生全部假別與加班勾選標籤 -->
+                    <label class="type-checkbox-chip active" id="chip_ANNUAL">
+                      <input type="checkbox" value="ANNUAL" checked onchange="App.onTypeCheckboxChange(this)">
+                      <span style="display:inline-block; width:9px; height:9px; border-radius:50%; background:#2563eb;"></span>
+                      <span>特休假</span>
+                    </label>
+                    <label class="type-checkbox-chip active" id="chip_COMP">
+                      <input type="checkbox" value="COMP" checked onchange="App.onTypeCheckboxChange(this)">
+                      <span style="display:inline-block; width:9px; height:9px; border-radius:50%; background:#059669;"></span>
+                      <span>補休假</span>
+                    </label>
+                    <label class="type-checkbox-chip active" id="chip_PERSONAL">
+                      <input type="checkbox" value="PERSONAL" checked onchange="App.onTypeCheckboxChange(this)">
+                      <span style="display:inline-block; width:9px; height:9px; border-radius:50%; background:#d97706;"></span>
+                      <span>事假</span>
+                    </label>
+                    <label class="type-checkbox-chip active" id="chip_SICK">
+                      <input type="checkbox" value="SICK" checked onchange="App.onTypeCheckboxChange(this)">
+                      <span style="display:inline-block; width:9px; height:9px; border-radius:50%; background:#e11d48;"></span>
+                      <span>病假</span>
+                    </label>
+                    <label class="type-checkbox-chip active" id="chip_MARRIAGE">
+                      <input type="checkbox" value="MARRIAGE" checked onchange="App.onTypeCheckboxChange(this)">
+                      <span style="display:inline-block; width:9px; height:9px; border-radius:50%; background:#db2777;"></span>
+                      <span>婚假</span>
+                    </label>
+                    <label class="type-checkbox-chip active" id="chip_BEREAVEMENT">
+                      <input type="checkbox" value="BEREAVEMENT" checked onchange="App.onTypeCheckboxChange(this)">
+                      <span style="display:inline-block; width:9px; height:9px; border-radius:50%; background:#475569;"></span>
+                      <span>喪假</span>
+                    </label>
+                    <label class="type-checkbox-chip active" id="chip_MENSTRUAL">
+                      <input type="checkbox" value="MENSTRUAL" checked onchange="App.onTypeCheckboxChange(this)">
+                      <span style="display:inline-block; width:9px; height:9px; border-radius:50%; background:#9333ea;"></span>
+                      <span>生理假</span>
+                    </label>
+                    <label class="type-checkbox-chip active" id="chip_MATERNITY">
+                      <input type="checkbox" value="MATERNITY" checked onchange="App.onTypeCheckboxChange(this)">
+                      <span style="display:inline-block; width:9px; height:9px; border-radius:50%; background:#ec4899;"></span>
+                      <span>產假</span>
+                    </label>
+                    <label class="type-checkbox-chip active" id="chip_PATERNITY">
+                      <input type="checkbox" value="PATERNITY" checked onchange="App.onTypeCheckboxChange(this)">
+                      <span style="display:inline-block; width:9px; height:9px; border-radius:50%; background:#0284c7;"></span>
+                      <span>陪產假</span>
+                    </label>
+                    <label class="type-checkbox-chip active" id="chip_OVERTIME">
+                      <input type="checkbox" value="OVERTIME" checked onchange="App.onTypeCheckboxChange(this)">
+                      <i class="fa-solid fa-clock" style="color: #f59e0b; font-size: 0.85rem;"></i>
+                      <span>加班申報單</span>
+                    </label>
                   </div>
                 </div>
               </div>
