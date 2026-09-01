@@ -1472,6 +1472,56 @@ const App = {
     if (modal) modal.classList.remove("active");
   },
 
+  openChangePasswordModal() {
+    const modal = document.getElementById("changePasswordModal");
+    if (!modal) return;
+    document.getElementById("oldPasswordInput").value = "";
+    document.getElementById("newPasswordInput").value = "";
+    document.getElementById("confirmPasswordInput").value = "";
+    const errEl = document.getElementById("passwordMismatchError");
+    if (errEl) errEl.style.display = "none";
+    modal.classList.add("active");
+  },
+
+  async handleChangePasswordSubmit(event) {
+    event.preventDefault();
+    const user = this.state.currentUser;
+    if (!user) {
+      this.showToast("請先登入系統！", "error");
+      return;
+    }
+
+    const oldPassword = document.getElementById("oldPasswordInput").value.trim();
+    const newPassword = document.getElementById("newPasswordInput").value.trim();
+    const confirmPassword = document.getElementById("confirmPasswordInput").value.trim();
+    const errEl = document.getElementById("passwordMismatchError");
+
+    if (newPassword !== confirmPassword) {
+      if (errEl) errEl.style.display = "block";
+      return;
+    }
+    if (errEl) errEl.style.display = "none";
+
+    if (oldPassword === newPassword) {
+      this.showToast("新密碼不可與目前密碼相同！", "warning");
+      return;
+    }
+
+    this.showToast("正在更新個人密碼...", "info");
+    const res = await ApiService.callApi("changePassword", {
+      userId: user.id,
+      oldPassword,
+      newPassword
+    });
+
+    if (res.success) {
+      this.showToast(res.message || "密碼修改成功！", "success");
+      this.closeModal("changePasswordModal");
+    } else {
+      this.showToast(res.message || "密碼修改失敗", "error");
+    }
+  },
+
   /**
    * 工具：狀態標籤 HTML
    */

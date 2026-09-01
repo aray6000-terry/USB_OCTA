@@ -136,6 +136,10 @@ function handleRequest(e) {
         result = syncHolidays();
         break;
 
+      case "changePassword":
+        result = changePassword(params);
+        break;
+
       default:
         result = { success: false, message: "Action not supported: " + action };
     }
@@ -637,6 +641,48 @@ function loginUser(email, password) {
     message: "登入成功",
     user: userSafe
   };
+}
+
+function changePassword(params) {
+  const { userId, oldPassword, newPassword } = params;
+  if (!userId || !oldPassword || !newPassword) {
+    return { success: false, message: "請完整填寫原密碼與新密碼！" };
+  }
+
+  if (String(newPassword).length < 4) {
+    return { success: false, message: "新密碼長度至少需 4 碼以上！" };
+  }
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const userSheet = ss.getSheetByName(CONFIG.SHEETS.USERS);
+  if (!userSheet) return { success: false, message: "使用者資料表不存在" };
+
+  const userData = userSheet.getDataRange().getValues();
+  const headers = userData[0];
+  const idIdx = headers.indexOf("id");
+  const passIdx = headers.indexOf("password_hash");
+
+  if (idIdx === -1 || passIdx === -1) {
+    return { success: false, message: "使用者表結構欄位遺失" };
+  }
+
+  for (let i = 1; i < userData.length; i++) {
+    if (String(userData[i][idIdx]).trim() === String(userId).trim()) {
+      const currentPass = String(userData[i][passIdx] !== undefined ? userData[i][passIdx] : "").trim();
+      if (currentPass !== String(oldPassword).trim()) {
+        return { success: false, message: "目前密碼輸入錯誤，請重新確認！" };
+      }
+
+      // 更新密碼至 users 表
+      userSheet.getRange(i + 1, passIdx + 1).setValue(String(newPassword).trim());
+      return {
+        success: true,
+        message: "密碼修改成功！下次登入請使用新密碼。"
+      };
+    }
+  }
+
+  return { success: false, message: `找不到員工編號: ${userId}` };
 }
 
 // ======================== 智慧工時計算引擎 ========================

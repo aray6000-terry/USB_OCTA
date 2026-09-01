@@ -693,6 +693,27 @@ const ApiService = {
         };
       }
 
+      case "changePassword": {
+        const { userId, oldPassword, newPassword } = params;
+        if (!userId || !oldPassword || !newPassword) {
+          return { success: false, message: "請完整填寫原密碼與新密碼！" };
+        }
+        if (String(newPassword).length < 4) {
+          return { success: false, message: "新密碼長度至少需 4 碼以上！" };
+        }
+        const user = db.users.find(u => u.id === userId);
+        if (!user) return { success: false, message: `找不到使用者: ${userId}` };
+        if (String(user.password_hash || "").trim() !== String(oldPassword).trim()) {
+          return { success: false, message: "目前密碼輸入錯誤，請重新確認！" };
+        }
+        user.password_hash = String(newPassword).trim();
+        MockDataEngine.save(db);
+        return {
+          success: true,
+          message: "密碼修改成功！下次登入請使用新密碼。"
+        };
+      }
+
       default:
         return { success: false, message: `Mock 不支援 action: ${action}` };
     }

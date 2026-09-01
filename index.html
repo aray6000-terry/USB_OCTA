@@ -147,7 +147,7 @@
         </div>
 
         <div class="header-right">
-          <!-- 使用者資料徽章與登出按鈕 -->
+          <!-- 使用者資料徽章與修改密碼 / 登出按鈕 -->
           <div class="user-profile-badge">
             <div class="user-avatar" id="userAvatar">王</div>
             <div class="user-meta">
@@ -155,6 +155,11 @@
               <span class="user-role-tag" id="userRoleTag">研發部 · Employee</span>
             </div>
           </div>
+
+          <button class="btn btn-sm btn-secondary" onclick="App.openChangePasswordModal()" title="修改個人登入密碼">
+            <i class="fa-solid fa-key"></i>
+            <span>修改密碼</span>
+          </button>
 
           <button class="btn btn-sm btn-secondary" onclick="App.handleLogout()" title="登出系統" style="color: var(--danger);">
             <i class="fa-solid fa-right-from-bracket"></i>
@@ -1076,6 +1081,46 @@
           <i class="fa-solid fa-trash-can"></i> 確認刪除
         </button>
       </div>
+    </div>
+  </div>
+
+  <!-- ==================== 彈窗 6：修改密碼彈窗 (Change Password Modal) ==================== -->
+  <div class="modal-overlay" id="changePasswordModal">
+    <div class="modal-content" style="max-width: 420px;">
+      <div class="modal-header">
+        <h4><i class="fa-solid fa-key" style="color: var(--primary);"></i> 修改個人登入密碼</h4>
+        <button class="modal-close-btn" onclick="App.closeModal('changePasswordModal')">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+      <form onsubmit="App.handleChangePasswordSubmit(event)">
+        <div class="modal-body">
+          <div class="form-group" style="margin-bottom: 14px;">
+            <label class="form-label">目前密碼 (Old Password) <span class="req-star">*</span></label>
+            <input type="password" class="form-control" id="oldPasswordInput" required placeholder="請輸入當前使用的密碼">
+          </div>
+
+          <div class="form-group" style="margin-bottom: 14px;">
+            <label class="form-label">新密碼 (New Password) <span class="req-star">*</span></label>
+            <input type="password" class="form-control" id="newPasswordInput" required minlength="4" placeholder="請輸入新密碼 (至少 4 碼)">
+          </div>
+
+          <div class="form-group" style="margin-bottom: 14px;">
+            <label class="form-label">確認新密碼 (Confirm New Password) <span class="req-star">*</span></label>
+            <input type="password" class="form-control" id="confirmPasswordInput" required minlength="4" placeholder="請再次輸入新密碼">
+          </div>
+
+          <div id="passwordMismatchError" style="display: none; padding: 8px 12px; background: #fff1f2; border: 1px solid #fecdd3; border-radius: var(--radius-md); font-size: 0.82rem; color: #be123c;">
+            <i class="fa-solid fa-circle-exclamation"></i> 兩次輸入的新密碼不一致，請重新檢查！
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="App.closeModal('changePasswordModal')">取消</button>
+          <button type="submit" class="btn btn-primary">
+            <i class="fa-solid fa-floppy-disk"></i> 儲存新密碼
+          </button>
+        </div>
+      </form>
     </div>
   </div>
 
