@@ -1441,3 +1441,49 @@ button, input, select, textarea {
   color: var(--text-muted);
 }
 
+/* ==========================================================================
+   假別多選勾選標籤群組 (History Multi-select Checkbox Badges)
+   ========================================================================== */
+.type-checkbox-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-top: 6px;
+}
+
+.type-checkbox-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: var(--radius-full);
+  border: 1.5px solid var(--border-color);
+  background: white;
+  font-size: 0.84rem;
+  font-weight: 500;
+  color: var(--text-main);
+  cursor: pointer;
+  user-select: none;
+  transition: all var(--transition-fast);
+}
+
+.type-checkbox-chip:hover {
+  border-color: var(--primary);
+  background: var(--bg-hover);
+}
+
+.type-checkbox-chip input[type="checkbox"] {
+  accent-color: var(--primary);
+  cursor: pointer;
+  width: 15px;
+  height: 15px;
+}
+
+.type-checkbox-chip.active {
+  background: var(--primary-light);
+  border-color: var(--primary);
+  color: var(--primary);
+  font-weight: 600;
+}
+

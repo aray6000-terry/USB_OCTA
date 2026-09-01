@@ -611,16 +611,17 @@
         </section>
 
 
-        <!-- ==================== 5. 個人差勤歷史紀錄與匯出 ==================== -->
+        <!-- ==================== 5. 差勤歷史紀錄與多條件匯出 ==================== -->
         <section class="view-section" id="view-history">
-          <div style="display: flex; flex-direction: column; gap: 20px; max-width: 1100px; margin: 0 auto;">
+          <div style="display: flex; flex-direction: column; gap: 20px; max-width: 1150px; margin: 0 auto;">
             
             <!-- 歷史紀錄查詢篩選卡片 -->
             <div class="form-card" style="max-width: 100%;">
               <div class="panel-header">
                 <div class="panel-title">
                   <i class="fa-solid fa-clock-rotate-left" style="color: var(--primary);"></i>
-                  個人請假歷史紀錄多條件查詢與匯出
+                  <span>差勤歷史紀錄多條件查詢與匯出</span>
+                  <span id="historyRoleScopeBadge" style="margin-left: 6px;"></span>
                 </div>
                 <button class="btn btn-sm btn-primary" onclick="App.exportHistoryCsv()">
                   <i class="fa-solid fa-file-arrow-down"></i> 匯出 CSV 報表 (支援 Excel)
@@ -628,14 +629,32 @@
               </div>
 
               <!-- 篩選表單區 -->
-              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px; margin-top: 12px;">
-                <div class="form-group">
-                  <label class="form-label"><i class="fa-solid fa-filter"></i> 假別篩選</label>
-                  <select class="form-control" id="historyFilterLeaveType" onchange="App.applyHistoryFilter()">
-                    <option value="ALL">全部假別 (All Types)</option>
+              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; margin-top: 12px;">
+                <!-- 部門篩選 (人資部 / 超級管理者可見) -->
+                <div class="form-group" id="historyDeptFilterGroup">
+                  <label class="form-label"><i class="fa-solid fa-building"></i> 所屬部門</label>
+                  <select class="form-control" id="historyFilterDept" onchange="App.onHistoryDeptChange()">
+                    <option value="ALL">全部部門 (All Departments)</option>
+                    <option value="研發部">研發部</option>
+                    <option value="設計部">設計部</option>
+                    <option value="管理部">管理部</option>
+                    <option value="業務部">業務部</option>
+                    <option value="工程部">工程部</option>
+                    <option value="財務部">財務部</option>
+                    <option value="維修部">維修部</option>
+                    <option value="人資部">人資部</option>
                   </select>
                 </div>
 
+                <!-- 同仁人員篩選 (人資部 / 管理者 / 主管可見) -->
+                <div class="form-group" id="historyUserFilterGroup">
+                  <label class="form-label"><i class="fa-solid fa-user"></i> 同仁人員</label>
+                  <select class="form-control" id="historyFilterUser" onchange="App.applyHistoryFilter()">
+                    <option value="ALL">全部同仁 (All Members)</option>
+                  </select>
+                </div>
+
+                <!-- 審核狀態 -->
                 <div class="form-group">
                   <label class="form-label"><i class="fa-solid fa-traffic-light"></i> 審核狀態</label>
                   <select class="form-control" id="historyFilterStatus" onchange="App.applyHistoryFilter()">
@@ -647,14 +666,32 @@
                   </select>
                 </div>
 
+                <!-- 起始日期 -->
                 <div class="form-group">
                   <label class="form-label"><i class="fa-solid fa-calendar-day"></i> 起始日期</label>
                   <input type="date" class="form-control" id="historyFilterStartDate" onchange="App.applyHistoryFilter()">
                 </div>
 
+                <!-- 結束日期 -->
                 <div class="form-group">
                   <label class="form-label"><i class="fa-solid fa-calendar-day"></i> 結束日期</label>
                   <input type="date" class="form-control" id="historyFilterEndDate" onchange="App.applyHistoryFilter()">
+                </div>
+
+                <!-- 假別多選勾選盒 (可自由複選) -->
+                <div class="form-group" style="grid-column: 1 / -1; margin-top: 4px; background: #f8fafc; padding: 12px 14px; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
+                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                    <label class="form-label" style="margin-bottom: 0; font-weight: 700; color: var(--text-main);">
+                      <i class="fa-solid fa-square-check" style="color: var(--primary);"></i> 假別多選勾選查詢 (可自由複選)
+                    </label>
+                    <div style="display: flex; gap: 6px;">
+                      <button type="button" class="btn btn-sm btn-secondary" style="padding: 2px 8px; font-size: 0.75rem;" onclick="App.toggleAllHistoryTypeCheckboxes(true)">全選</button>
+                      <button type="button" class="btn btn-sm btn-secondary" style="padding: 2px 8px; font-size: 0.75rem;" onclick="App.toggleAllHistoryTypeCheckboxes(false)">清除</button>
+                    </div>
+                  </div>
+                  <div class="type-checkbox-group" id="historyLeaveTypeCheckboxes">
+                    <!-- JS 動態產生全部假別與加班勾選標籤 -->
+                  </div>
                 </div>
               </div>
 
@@ -669,7 +706,7 @@
                 </div>
 
                 <div style="display: flex; gap: 8px; align-items: center;">
-                  <input type="text" class="form-control" id="historyFilterKeyword" placeholder="搜尋事由或單號..." style="width: 180px; padding: 5px 10px; font-size: 0.85rem;" oninput="App.applyHistoryFilter()">
+                  <input type="text" class="form-control" id="historyFilterKeyword" placeholder="搜尋事由/單號/姓名..." style="width: 190px; padding: 5px 10px; font-size: 0.85rem;" oninput="App.applyHistoryFilter()">
                   <button class="btn btn-sm btn-secondary" onclick="App.resetHistoryFilter()" title="重設所有篩選條件">
                     <i class="fa-solid fa-rotate-left"></i> 重設
                   </button>
@@ -725,7 +762,7 @@
               <div class="panel-header" style="margin-bottom: 12px;">
                 <div class="panel-title">
                   <i class="fa-solid fa-table-list" style="color: var(--primary);"></i>
-                  請假明細清單
+                  差勤申請與加班明細清單
                 </div>
                 <div id="historyTypeDistribution" style="display: flex; gap: 6px; flex-wrap: wrap;"></div>
               </div>
@@ -735,11 +772,12 @@
                   <thead>
                     <tr>
                       <th>單號</th>
-                      <th>假別</th>
+                      <th>申請同仁</th>
+                      <th>假別 / 項目</th>
                       <th>薪資給付</th>
-                      <th>請假起訖時間</th>
-                      <th>請假工時</th>
-                      <th>申請事由</th>
+                      <th>起訖時間區間</th>
+                      <th>工時</th>
+                      <th>事由說明</th>
                       <th>證明文件</th>
                       <th>審核狀態</th>
                       <th>申請時間</th>
@@ -755,7 +793,6 @@
 
           </div>
         </section>
-
 
         <!-- ==================== 6. 系統設定與 Google Sheet 串接 ==================== -->
         <section class="view-section" id="view-settings">
@@ -999,9 +1036,13 @@
               <label class="form-label">所屬部門 <span class="req-star">*</span></label>
               <select class="form-control" id="newUserDept" required>
                 <option value="研發部">研發部 (DEPT_RD)</option>
-                <option value="行銷部">行銷部 (DEPT_MKT)</option>
-                <option value="人力資源部">人力資源部 (DEPT_HR)</option>
+                <option value="設計部">設計部 (DEPT_DESIGN)</option>
+                <option value="管理部">管理部 (DEPT_MGMT)</option>
                 <option value="業務部">業務部 (DEPT_SALES)</option>
+                <option value="工程部">工程部 (DEPT_ENG)</option>
+                <option value="財務部">財務部 (DEPT_FIN)</option>
+                <option value="維修部">維修部 (DEPT_MAINT)</option>
+                <option value="人資部">人資部 (DEPT_HR)</option>
               </select>
             </div>
             <div class="form-group">

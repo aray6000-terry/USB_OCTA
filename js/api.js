@@ -607,13 +607,27 @@ const ApiService = {
           newId = "EMP" + ("00" + (maxNum + 1)).slice(-3);
         }
 
+        const deptMap = {
+          "研發部": "DEPT_RD",
+          "設計部": "DEPT_DESIGN",
+          "管理部": "DEPT_MGMT",
+          "業務部": "DEPT_SALES",
+          "工程部": "DEPT_ENG",
+          "財務部": "DEPT_FIN",
+          "維修部": "DEPT_MAINT",
+          "人資部": "DEPT_HR",
+          "人力資源部": "DEPT_HR"
+        };
+        const deptName = department_name || "研發部";
+        const deptId = department_id || deptMap[deptName] || "DEPT_RD";
+
         const newUser = {
           id: newId,
           name,
           email,
           password_hash: password || "123456",
-          department_id: department_id || (department_name === "研發部" ? "DEPT_RD" : (department_name === "行銷部" ? "DEPT_MKT" : "DEPT_HR")),
-          department_name: department_name || "研發部",
+          department_id: deptId,
+          department_name: deptName,
           manager_id: manager_id || "EMP002",
           role: role || "Employee",
           hire_date: hire_date || LeaveEngine.formatDateOnly(new Date()),

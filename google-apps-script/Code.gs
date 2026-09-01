@@ -163,14 +163,19 @@ function initDatabase() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheets = CONFIG.SHEETS;
 
-  // 1. users 表 (新增 hire_date 到職日欄位)
+  // 1. users 表 (新增 hire_date 到職日欄位，涵蓋 8 大部門)
   const userHeaders = ["id", "name", "email", "password_hash", "department_id", "department_name", "manager_id", "role", "hire_date", "created_at"];
   const userSeeds = [
     ["EMP001", "王小明", "employee@company.com", "123456", "DEPT_RD", "研發部", "EMP002", "Employee", "2024-03-01", "2026-01-01 09:00:00"],
     ["EMP002", "陳主管", "manager@company.com", "123456", "DEPT_RD", "研發部", "EMP003", "Manager", "2023-01-15", "2026-01-01 09:00:00"],
-    ["EMP003", "林經理 (HR/Admin)", "admin@company.com", "123456", "DEPT_HR", "人力資源部", "", "Admin", "2020-07-01", "2026-01-01 09:00:00"],
-    ["EMP004", "張大春", "spring@company.com", "123456", "DEPT_MKT", "行銷部", "EMP002", "Employee", "2025-10-01", "2026-01-01 09:00:00"],
-    ["EMP005", "李美麗", "mary@company.com", "123456", "DEPT_RD", "研發部", "EMP002", "Employee", "2024-08-01", "2026-01-01 09:00:00"]
+    ["EMP003", "林經理 (HR/Admin)", "admin@company.com", "123456", "DEPT_HR", "人資部", "", "Admin", "2020-07-01", "2026-01-01 09:00:00"],
+    ["EMP004", "張業務", "sales@company.com", "123456", "DEPT_SALES", "業務部", "EMP002", "Employee", "2025-10-01", "2026-01-01 09:00:00"],
+    ["EMP005", "李設計", "design@company.com", "123456", "DEPT_DESIGN", "設計部", "EMP002", "Employee", "2024-08-01", "2026-01-01 09:00:00"],
+    ["EMP006", "周工程", "eng@company.com", "123456", "DEPT_ENG", "工程部", "EMP002", "Employee", "2024-05-01", "2026-01-01 09:00:00"],
+    ["EMP007", "錢財務", "fin@company.com", "123456", "DEPT_FIN", "財務部", "EMP003", "Employee", "2023-11-01", "2026-01-01 09:00:00"],
+    ["EMP008", "趙維修", "maint@company.com", "123456", "DEPT_MAINT", "維修部", "EMP002", "Employee", "2025-02-01", "2026-01-01 09:00:00"],
+    ["EMP009", "孫管理", "mgmt@company.com", "123456", "DEPT_MGMT", "管理部", "EMP003", "Manager", "2022-04-01", "2026-01-01 09:00:00"],
+    ["EMP010", "吳人資", "hr@company.com", "123456", "DEPT_HR", "人資部", "EMP003", "HR", "2023-06-01", "2026-01-01 09:00:00"]
   ];
   setupSheet(ss, sheets.USERS, userHeaders, userSeeds);
 
@@ -1445,8 +1450,19 @@ function adminCreateUser(params) {
   }
 
   const passwordHash = password || "123456";
-  const deptId = department_id || (department_name === "研發部" ? "DEPT_RD" : (department_name === "行銷部" ? "DEPT_MKT" : "DEPT_HR"));
+  const deptMap = {
+    "研發部": "DEPT_RD",
+    "設計部": "DEPT_DESIGN",
+    "管理部": "DEPT_MGMT",
+    "業務部": "DEPT_SALES",
+    "工程部": "DEPT_ENG",
+    "財務部": "DEPT_FIN",
+    "維修部": "DEPT_MAINT",
+    "人資部": "DEPT_HR",
+    "人力資源部": "DEPT_HR"
+  };
   const deptName = department_name || "研發部";
+  const deptId = department_id || deptMap[deptName] || "DEPT_RD";
   const mgrId = manager_id || "EMP002";
   const userRole = role || "Employee";
   const hireDateVal = hire_date || Utilities.formatDate(new Date(), "Asia/Taipei", "yyyy-MM-dd");

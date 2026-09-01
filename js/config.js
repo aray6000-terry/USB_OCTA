@@ -29,6 +29,18 @@ const SYSTEM_CONFIG = {
     SESSION_LOGGED_IN: "LEAVE_SYS_LOGGED_IN_V1"
   },
 
+  // 公司標準 8 大部門清單
+  DEPARTMENTS: [
+    { id: "DEPT_RD", name: "研發部" },
+    { id: "DEPT_DESIGN", name: "設計部" },
+    { id: "DEPT_MGMT", name: "管理部" },
+    { id: "DEPT_SALES", name: "業務部" },
+    { id: "DEPT_ENG", name: "工程部" },
+    { id: "DEPT_FIN", name: "財務部" },
+    { id: "DEPT_MAINT", name: "維修部" },
+    { id: "DEPT_HR", name: "人資部" }
+  ],
+
   // 假別定義與屬性設定
   LEAVE_TYPES: [
     {
@@ -100,6 +112,26 @@ const SYSTEM_CONFIG = {
       color: "#9333ea",
       badgeClass: "badge-purple",
       description: "女性同仁每月得請生理假一日，不支薪，以半天(4h)為單位"
+    },
+    {
+      id: "MATERNITY",
+      name: "產假",
+      minUnit: 8.0,
+      requiresAttachment: true,
+      isPaid: true,
+      color: "#ec4899",
+      badgeClass: "badge-pink",
+      description: "女性員工分娩給予產假8星期，工資照給，需附出生證明"
+    },
+    {
+      id: "PATERNITY",
+      name: "陪產假",
+      minUnit: 4.0,
+      requiresAttachment: true,
+      isPaid: true,
+      color: "#0284c7",
+      badgeClass: "badge-blue",
+      description: "陪伴配偶分娩給予7日陪產檢及陪產假，工資照給"
     }
   ],
 

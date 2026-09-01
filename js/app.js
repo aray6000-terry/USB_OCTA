@@ -1323,6 +1323,520 @@ const App = {
   },
 
   /**
+   * 6. 差勤歷史紀錄與多條件查詢 (History View)
+   */
+  renderHistory() {
+    const user = this.state.currentUser;
+    if (!user) return;
+
+    const isHrOrAdmin = (
+      user.role === "Admin" ||
+      user.role === "HR" ||
+      user.department_name === "人資部" ||
+      user.department_name === "人力資源部" ||
+      user.department_id === "DEPT_HR"
+    );
+    const isManager = (user.role === "Manager");
+
+    // 1. 設置身分檢視範圍徽章
+    const badgeEl = document.getElementById("historyRoleScopeBadge");
+    if (badgeEl) {
+      if (isHrOrAdmin) {
+        badgeEl.innerHTML = `<span class="badge badge-purple" style="font-size: 0.78rem;"><i class="fa-solid fa-shield-halved"></i> 人資部/管理者全域模式 (可檢視全公司所有紀錄)</span>`;
+      } else if (isManager) {
+        badgeEl.innerHTML = `<span class="badge badge-blue" style="font-size: 0.78rem;"><i class="fa-solid fa-users"></i> 主管模式 (可檢視轄下同仁與個人紀錄)</span>`;
+      } else {
+        badgeEl.innerHTML = `<span class="badge" style="background:#f1f5f9; color:var(--text-muted); font-size: 0.78rem;"><i class="fa-solid fa-user"></i> 個人模式</span>`;
+      }
+    }
+
+    // 2. 設置部門篩選選單
+    const deptGroup = document.getElementById("historyDeptFilterGroup");
+    const deptSelect = document.getElementById("historyFilterDept");
+    if (deptGroup && deptSelect) {
+      if (isHrOrAdmin) {
+        deptGroup.style.display = "block";
+        deptSelect.innerHTML = `<option value="ALL">全部部門 (All Departments)</option>`;
+        SYSTEM_CONFIG.DEPARTMENTS.forEach(d => {
+          deptSelect.innerHTML += `<option value="${d.name}">${d.name}</option>`;
+        });
+      } else {
+        deptGroup.style.display = "none";
+      }
+    }
+
+    // 3. 設置同仁人員篩選選單
+    const userGroup = document.getElementById("historyUserFilterGroup");
+    if (userGroup) {
+      if (isHrOrAdmin || isManager) {
+        userGroup.style.display = "block";
+        this.populateHistoryUserSelect();
+      } else {
+        userGroup.style.display = "none";
+      }
+    }
+
+    // 4. 動態渲染假別多選勾選盒 (Multi-select Checkboxes)
+    const typeBox = document.getElementById("historyLeaveTypeCheckboxes");
+    if (typeBox) {
+      typeBox.innerHTML = "";
+      SYSTEM_CONFIG.LEAVE_TYPES.forEach(t => {
+        const label = document.createElement("label");
+        label.className = "type-checkbox-chip active";
+        label.id = `chip_${t.id}`;
+        label.innerHTML = `
+          <input type="checkbox" value="${t.id}" checked onchange="App.onTypeCheckboxChange(this)">
+          <span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:${t.color};"></span>
+          ${t.name}
+        `;
+        typeBox.appendChild(label);
+      });
+
+      // 加入加班單勾選盒
+      const otLabel = document.createElement("label");
+      otLabel.className = "type-checkbox-chip active";
+      otLabel.id = "chip_OVERTIME";
+      otLabel.innerHTML = `
+        <input type="checkbox" value="OVERTIME" checked onchange="App.onTypeCheckboxChange(this)">
+        <i class="fa-solid fa-clock" style="color: var(--warning); font-size: 0.8rem;"></i>
+        加班申報單
+      `;
+      typeBox.appendChild(otLabel);
+    }
+
+    // 5. 執行初次過濾查詢
+    this.applyHistoryFilter();
+  },
+
+  /**
+   * 填充歷史紀錄的人員下拉選單
+   */
+  populateHistoryUserSelect() {
+    const user = this.state.currentUser;
+    const userSelect = document.getElementById("historyFilterUser");
+    const deptSelect = document.getElementById("historyFilterDept");
+    if (!userSelect) return;
+
+    const isHrOrAdmin = (
+      user.role === "Admin" ||
+      user.role === "HR" ||
+      user.department_name === "人資部" ||
+      user.department_name === "人力資源部" ||
+      user.department_id === "DEPT_HR"
+    );
+    const isManager = (user.role === "Manager");
+    const selectedDept = deptSelect ? deptSelect.value : "ALL";
+
+    userSelect.innerHTML = `<option value="ALL">全部同仁 (All Members)</option>`;
+
+    let candidates = [];
+    if (isHrOrAdmin) {
+      candidates = this.state.users;
+    } else if (isManager) {
+      candidates = this.state.users.filter(u => u.id === user.id || u.manager_id === user.id);
+    }
+
+    if (selectedDept !== "ALL") {
+      candidates = candidates.filter(u => u.department_name === selectedDept);
+    }
+
+    candidates.forEach(u => {
+      userSelect.innerHTML += `<option value="${u.id}">${u.name} (${u.department_name} - ${u.id})</option>`;
+    });
+  },
+
+  /**
+   * 當部門篩選變更時
+   */
+  onHistoryDeptChange() {
+    this.populateHistoryUserSelect();
+    this.applyHistoryFilter();
+  },
+
+  /**
+   * 假別勾選盒狀態切換
+   */
+  onTypeCheckboxChange(input) {
+    const label = input.closest(".type-checkbox-chip");
+    if (label) {
+      if (input.checked) {
+        label.classList.add("active");
+      } else {
+        label.classList.remove("active");
+      }
+    }
+    this.applyHistoryFilter();
+  },
+
+  /**
+   * 全選或清除假別勾選
+   */
+  toggleAllHistoryTypeCheckboxes(selectAll) {
+    const container = document.getElementById("historyLeaveTypeCheckboxes");
+    if (!container) return;
+    const checkboxes = container.querySelectorAll('input[type="checkbox"]');
+    checkboxes.forEach(cb => {
+      cb.checked = !!selectAll;
+      const label = cb.closest(".type-checkbox-chip");
+      if (label) {
+        if (selectAll) label.classList.add("active");
+        else label.classList.remove("active");
+      }
+    });
+    this.applyHistoryFilter();
+  },
+
+  /**
+   * 執行歷史紀錄多條件綜合過濾
+   */
+  applyHistoryFilter() {
+    const user = this.state.currentUser;
+    if (!user) return;
+
+    const isHrOrAdmin = (
+      user.role === "Admin" ||
+      user.role === "HR" ||
+      user.department_name === "人資部" ||
+      user.department_name === "人力資源部" ||
+      user.department_id === "DEPT_HR"
+    );
+    const isManager = (user.role === "Manager");
+
+    // 1. 取得勾選之假別代碼清單
+    const checkedTypes = [];
+    const container = document.getElementById("historyLeaveTypeCheckboxes");
+    if (container) {
+      container.querySelectorAll('input[type="checkbox"]:checked').forEach(cb => {
+        checkedTypes.push(cb.value);
+      });
+    }
+
+    // 2. 取得其他表單篩選條件
+    const deptVal = document.getElementById("historyFilterDept") ? document.getElementById("historyFilterDept").value : "ALL";
+    const userVal = document.getElementById("historyFilterUser") ? document.getElementById("historyFilterUser").value : "ALL";
+    const statusVal = document.getElementById("historyFilterStatus") ? document.getElementById("historyFilterStatus").value : "ALL";
+    const startDateVal = document.getElementById("historyFilterStartDate") ? document.getElementById("historyFilterStartDate").value : "";
+    const endDateVal = document.getElementById("historyFilterEndDate") ? document.getElementById("historyFilterEndDate").value : "";
+    const keyword = document.getElementById("historyFilterKeyword") ? document.getElementById("historyFilterKeyword").value.trim().toLowerCase() : "";
+
+    // 3. 收集所有可視的請假單與加班單
+    const allRecords = [];
+
+    // 請假單轉換
+    this.state.requests.forEach(req => {
+      const applicant = this.state.users.find(u => u.id === req.user_id) || { id: req.user_id, name: req.user_id, department_name: "--" };
+      
+      // 權限可視性判定
+      let isVisible = false;
+      if (isHrOrAdmin) {
+        isVisible = true; // 人資與超級管理者看全員
+      } else if (isManager) {
+        isVisible = (req.user_id === user.id || applicant.manager_id === user.id);
+      } else {
+        isVisible = (req.user_id === user.id);
+      }
+
+      if (isVisible) {
+        const typeDef = SYSTEM_CONFIG.LEAVE_TYPES.find(t => t.id === req.leave_type_id) || { name: req.leave_type_id, isPaid: false, badgeClass: "badge-blue", color: "#4f46e5" };
+        allRecords.push({
+          id: req.id,
+          type: "LEAVE",
+          leave_type_id: req.leave_type_id,
+          typeName: typeDef.name,
+          badgeClass: typeDef.badgeClass || "badge-blue",
+          typeColor: typeDef.color || "#4f46e5",
+          user_id: req.user_id,
+          userName: applicant.name,
+          userDept: applicant.department_name,
+          isPaid: typeDef.isPaid,
+          isPaidText: typeDef.isPaid ? "有薪假" : "不支薪",
+          startTime: req.start_time,
+          endTime: req.end_time,
+          hours: Number(req.total_hours) || 0,
+          reason: req.reason || "",
+          attachment_url: req.attachment_url || "",
+          status: req.status,
+          createdAt: req.created_at || req.start_time
+        });
+      }
+    });
+
+    // 加班單轉換 (若 OVERTIME 假別被勾選)
+    this.state.overtimes.forEach(ot => {
+      const applicant = this.state.users.find(u => u.id === ot.user_id) || { id: ot.user_id, name: ot.user_id, department_name: "--" };
+      
+      // 權限可視性判定
+      let isVisible = false;
+      if (isHrOrAdmin) {
+        isVisible = true; // 人資與超級管理者看全員
+      } else if (isManager) {
+        isVisible = (ot.user_id === user.id || applicant.manager_id === user.id);
+      } else {
+        isVisible = (ot.user_id === user.id);
+      }
+
+      if (isVisible) {
+        const sTime = `${ot.date} ${LeaveEngine.formatTimeOnly(ot.start_time)}`;
+        const eTime = `${ot.date} ${LeaveEngine.formatTimeOnly(ot.end_time)}`;
+        allRecords.push({
+          id: ot.id,
+          type: "OVERTIME",
+          leave_type_id: "OVERTIME",
+          typeName: `加班 (${ot.comp_rate}x換補休)`,
+          badgeClass: "badge-amber",
+          typeColor: "#f59e0b",
+          user_id: ot.user_id,
+          userName: applicant.name,
+          userDept: applicant.department_name,
+          isPaid: true,
+          isPaidText: `換發補休 +${ot.comp_hours}h`,
+          startTime: sTime,
+          endTime: eTime,
+          hours: Number(ot.hours) || 0,
+          reason: ot.reason || "",
+          attachment_url: "",
+          status: ot.status,
+          createdAt: ot.created_at || ot.date
+        });
+      }
+    });
+
+    // 4. 多條件過濾
+    const filtered = allRecords.filter(item => {
+      // 假別多選勾選過濾
+      if (checkedTypes.length > 0 && !checkedTypes.includes(item.leave_type_id)) {
+        return false;
+      }
+      if (checkedTypes.length === 0) {
+        return false;
+      }
+
+      // 部門過濾
+      if (deptVal !== "ALL" && item.userDept !== deptVal) {
+        return false;
+      }
+
+      // 人員過濾
+      if (userVal !== "ALL" && item.user_id !== userVal) {
+        return false;
+      }
+
+      // 狀態過濾
+      if (statusVal !== "ALL" && item.status !== statusVal) {
+        return false;
+      }
+
+      // 日期區間過濾
+      const itemStartDate = item.startTime.substring(0, 10);
+      const itemEndDate = item.endTime.substring(0, 10);
+      if (startDateVal && itemEndDate < startDateVal) {
+        return false;
+      }
+      if (endDateVal && itemStartDate > endDateVal) {
+        return false;
+      }
+
+      // 關鍵字過濾 (單號、申請人、事由、假別名稱)
+      if (keyword) {
+        const text = `${item.id} ${item.userName} ${item.userDept} ${item.typeName} ${item.reason}`.toLowerCase();
+        if (!text.includes(keyword)) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+
+    // 依申請時間/開始時間新到舊排序
+    filtered.sort((a, b) => new Date(b.createdAt || b.startTime) - new Date(a.createdAt || a.startTime));
+    this.state.lastFilteredHistory = filtered;
+
+    // 5. 更新統計摘要卡片
+    const totalCount = filtered.length;
+    const totalHours = filtered.reduce((sum, r) => sum + r.hours, 0);
+    const approvedHours = filtered.filter(r => r.status === "APPROVED").reduce((sum, r) => sum + r.hours, 0);
+    const pendingHours = filtered.filter(r => r.status === "PENDING" || r.status === "CANCEL_PENDING").reduce((sum, r) => sum + r.hours, 0);
+
+    const countEl = document.getElementById("historyStatCount");
+    const hoursEl = document.getElementById("historyStatHours");
+    const appHoursEl = document.getElementById("historyStatApprovedHours");
+    const pendHoursEl = document.getElementById("historyStatPendingHours");
+
+    if (countEl) countEl.textContent = `${totalCount} 筆`;
+    if (hoursEl) hoursEl.textContent = `${totalHours.toFixed(1)} h`;
+    if (appHoursEl) appHoursEl.textContent = `${approvedHours.toFixed(1)} h`;
+    if (pendHoursEl) pendHoursEl.textContent = `${pendingHours.toFixed(1)} h`;
+
+    // 6. 渲染明細清單表格
+    const tbody = document.getElementById("historyTableBody");
+    if (!tbody) return;
+    tbody.innerHTML = "";
+
+    if (filtered.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="11" style="text-align: center; color: var(--text-muted); padding: 36px;"><i class="fa-solid fa-inbox" style="font-size: 1.5rem; margin-bottom: 8px; display: block;"></i>查無符合篩選條件的差勤紀錄</td></tr>`;
+      return;
+    }
+
+    filtered.forEach(item => {
+      let statusBadge = "";
+      switch (item.status) {
+        case "APPROVED":
+          statusBadge = `<span class="badge badge-approved"><i class="fa-solid fa-check"></i> 已核准</span>`;
+          break;
+        case "PENDING":
+          statusBadge = `<span class="badge badge-pending"><i class="fa-solid fa-clock"></i> 審核中</span>`;
+          break;
+        case "REJECTED":
+          statusBadge = `<span class="badge badge-rejected"><i class="fa-solid fa-xmark"></i> 已駁回</span>`;
+          break;
+        case "CANCELLED":
+          statusBadge = `<span class="badge badge-slate"><i class="fa-solid fa-ban"></i> 已銷假</span>`;
+          break;
+        case "CANCEL_PENDING":
+          statusBadge = `<span class="badge badge-amber"><i class="fa-solid fa-hourglass-half"></i> 銷假審核中</span>`;
+          break;
+        default:
+          statusBadge = `<span class="badge badge-blue">${item.status}</span>`;
+      }
+
+      const isSelf = (item.user_id === user.id);
+      let actionHtml = "--";
+      if (isSelf && item.type === "LEAVE") {
+        if (item.status === "PENDING") {
+          actionHtml = `<button class="btn btn-sm btn-secondary" style="color: var(--danger); padding: 3px 8px; font-size: 0.78rem;" onclick="App.handleCancelClick('${item.id}', 'PENDING')"><i class="fa-solid fa-ban"></i> 撤銷</button>`;
+        } else if (item.status === "APPROVED") {
+          actionHtml = `<button class="btn btn-sm btn-secondary" style="color: var(--primary); padding: 3px 8px; font-size: 0.78rem;" onclick="App.handleCancelClick('${item.id}', 'APPROVED')"><i class="fa-solid fa-arrow-rotate-left"></i> 銷假</button>`;
+        }
+      }
+
+      const attachHtml = item.attachment_url
+        ? `<a href="${item.attachment_url}" target="_blank" style="color: var(--primary); font-size: 0.8rem; text-decoration: underline;"><i class="fa-solid fa-paperclip"></i> 檢視附件</a>`
+        : `<span style="color: var(--text-muted); font-size: 0.8rem;">--</span>`;
+
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td><strong style="font-family: 'JetBrains Mono'; font-size: 0.84rem; color: var(--primary);">${item.id}</strong></td>
+        <td>
+          <strong class="name-cell" style="display: inline-block; min-width: 5.5em; font-size: 0.9rem;">${item.userName}</strong>
+          <div style="font-size: 0.75rem; color: var(--text-muted);">${item.userDept} · ${item.user_id}</div>
+        </td>
+        <td>
+          <span class="badge" style="background: ${item.typeColor}18; color: ${item.typeColor}; border: 1px solid ${item.typeColor}40; font-weight: 600;">
+            ${item.typeName}
+          </span>
+        </td>
+        <td><span style="font-size: 0.8rem; color: ${item.isPaid ? 'var(--success)' : 'var(--text-muted)'}; font-weight: 600;">${item.isPaidText}</span></td>
+        <td style="font-size: 0.82rem; line-height: 1.4;">
+          <strong>${item.startTime}</strong><br>
+          <span style="color: var(--text-muted);">至 ${item.endTime}</span>
+        </td>
+        <td><strong style="font-family: 'JetBrains Mono'; font-size: 0.95rem; color: var(--primary);">${item.hours}</strong> h</td>
+        <td style="font-size: 0.82rem; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${item.reason}">${item.reason || '--'}</td>
+        <td>${attachHtml}</td>
+        <td>${statusBadge}</td>
+        <td style="font-size: 0.78rem; color: var(--text-muted);">${item.createdAt}</td>
+        <td>${actionHtml}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+  },
+
+  /**
+   * 設定快捷時間區間
+   */
+  setHistoryPresetRange(preset) {
+    const now = new Date();
+    const startInput = document.getElementById("historyFilterStartDate");
+    const endInput = document.getElementById("historyFilterEndDate");
+    if (!startInput || !endInput) return;
+
+    if (preset === "this_month") {
+      const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+      const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+      startInput.value = LeaveEngine.formatDateOnly(firstDay);
+      endInput.value = LeaveEngine.formatDateOnly(lastDay);
+    } else if (preset === "this_year") {
+      startInput.value = `${now.getFullYear()}-01-01`;
+      endInput.value = `${now.getFullYear()}-12-31`;
+    } else if (preset === "last_3_months") {
+      const past3m = new Date(now.getFullYear(), now.getMonth() - 2, 1);
+      startInput.value = LeaveEngine.formatDateOnly(past3m);
+      endInput.value = LeaveEngine.formatDateOnly(now);
+    } else if (preset === "all") {
+      startInput.value = "";
+      endInput.value = "";
+    }
+
+    this.applyHistoryFilter();
+  },
+
+  /**
+   * 重設所有歷史紀錄篩選條件
+   */
+  resetHistoryFilter() {
+    const deptSelect = document.getElementById("historyFilterDept");
+    const userSelect = document.getElementById("historyFilterUser");
+    const statusSelect = document.getElementById("historyFilterStatus");
+    const startInput = document.getElementById("historyFilterStartDate");
+    const endInput = document.getElementById("historyFilterEndDate");
+    const kwInput = document.getElementById("historyFilterKeyword");
+
+    if (deptSelect) deptSelect.value = "ALL";
+    if (userSelect) {
+      this.populateHistoryUserSelect();
+      userSelect.value = "ALL";
+    }
+    if (statusSelect) statusSelect.value = "ALL";
+    if (startInput) startInput.value = "";
+    if (endInput) endInput.value = "";
+    if (kwInput) kwInput.value = "";
+
+    this.toggleAllHistoryTypeCheckboxes(true);
+    this.showToast("已重設所有篩選條件", "info");
+  },
+
+  /**
+   * 匯出當前篩選之差勤紀錄為 CSV 報表 (支援 Excel UTF-8 BOM)
+   */
+  exportHistoryCsv() {
+    const list = this.state.lastFilteredHistory || [];
+    if (list.length === 0) {
+      this.showToast("目前查無符合條件之紀錄可供匯出！", "warning");
+      return;
+    }
+
+    const headers = ["單號", "申請同仁", "員工編號", "所屬部門", "假別/項目", "薪資給付", "起始時間", "結束時間", "工時(小時)", "申請事由", "審核狀態", "申請時間"];
+    const rows = list.map(item => [
+      `"${item.id}"`,
+      `"${item.userName}"`,
+      `"${item.user_id}"`,
+      `"${item.userDept}"`,
+      `"${item.typeName}"`,
+      `"${item.isPaidText}"`,
+      `"${item.startTime}"`,
+      `"${item.endTime}"`,
+      item.hours,
+      `"${(item.reason || '').replace(/"/g, '""')}"`,
+      `"${item.status}"`,
+      `"${item.createdAt}"`
+    ]);
+
+    const csvContent = "\uFEFF" + [headers.join(","), ...rows.map(r => r.join(","))].join("\r\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    const timestamp = LeaveEngine.formatDateOnly(new Date()).replace(/-/g, "");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `差勤紀錄報表_${timestamp}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    this.showToast(`已成功匯出 ${list.length} 筆差勤紀錄報表！`, "success");
+  },
+
+  /**
    * 7. 系統設定 (Settings) - 僅管理者權限可存取
    */
   renderSettings() {
