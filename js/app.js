@@ -1937,6 +1937,21 @@ const App = {
     document.getElementById("newUserEmail").value = "";
     document.getElementById("newUserHireDate").value = LeaveEngine.formatDateOnly(new Date());
     document.getElementById("newUserPassword").value = "123456";
+
+    // 動態由 Google Sheet (this.state.users) 載入實際存在之員工與主管選項
+    const mgrSelect = document.getElementById("newUserManager");
+    if (mgrSelect) {
+      mgrSelect.innerHTML = `<option value="">-- 無直屬主管 (最高主管/自簽) --</option>`;
+      if (this.state.users && this.state.users.length > 0) {
+        this.state.users.forEach(u => {
+          const isMgr = LeaveEngine.isUserManager(u);
+          const roleTag = isMgr ? " [主管/管理者]" : "";
+          const deptName = u.department_name || u.department_id || "";
+          mgrSelect.innerHTML += `<option value="${u.id}">${u.name} (${deptName} · ${u.id})${roleTag}</option>`;
+        });
+      }
+    }
+
     this.previewNewUserAnnualLeave();
     modal.classList.add("active");
   },
