@@ -62,32 +62,6 @@ const ApiService = {
           body: JSON.stringify(payload)
         });
         const result = await response.json();
-
-        // 智慧容錯：若遠端 GAS 因舊版本型態比對問題回傳失敗，自動使用 Google Sheet 的 users 資料表進行驗證
-        if (action === "login" && !result.success) {
-          try {
-            const bootRes = await fetch(gasUrl, {
-              method: "POST",
-              headers: { "Content-Type": "text/plain;charset=utf-8" },
-              body: JSON.stringify({ action: "getBootstrapData" })
-            });
-            const bootData = await bootRes.json();
-            if (bootData && bootData.success && bootData.data && bootData.data.users) {
-              const inputEmail = String(params.email || "").trim().toLowerCase();
-              const matched = bootData.data.users.find(u => String(u.email || "").trim().toLowerCase() === inputEmail);
-              if (matched) {
-                return {
-                  success: true,
-                  message: "登入成功 (已驗證 Google Sheet 使用者)",
-                  user: matched
-                };
-              }
-            }
-          } catch (e) {
-            console.warn("GAS 登入雙重驗證異常：", e);
-          }
-        }
-
         return result;
       } catch (err) {
         console.error("線上 GAS API 呼叫失敗，自動降級使用本機資料庫：", err);
