@@ -1946,14 +1946,15 @@ const App = {
         this.state.users.forEach(u => {
           const deptName = u.department_name || u.department_id || "未設部門";
           const rawRole = (u.role || "Employee").toString().trim();
+          const lowerRole = rawRole.toLowerCase();
           let roleDisplay = rawRole;
-          if (rawRole === "Admin" || rawRole === "管理者" || rawRole === "管理員") {
+          if (lowerRole === "admin" || lowerRole === "管理者" || lowerRole === "管理員" || lowerRole === "超級管理員") {
             roleDisplay = "最高管理者 (Admin)";
-          } else if (rawRole === "Manager" || rawRole === "主管" || rawRole === "經理") {
-            roleDisplay = "部門主管 (Manager)";
-          } else if (rawRole === "HR" || rawRole === "人資") {
+          } else if (lowerRole === "hr" || lowerRole === "人資" || lowerRole === "人事") {
             roleDisplay = "人事管理 (HR)";
-          } else if (rawRole === "Employee" || rawRole === "一般同仁") {
+          } else if (lowerRole === "manager" || lowerRole === "主管" || lowerRole === "部門主管") {
+            roleDisplay = "部門主管 (Manager)";
+          } else if (lowerRole === "employee" || lowerRole === "一般同仁" || lowerRole === "員工") {
             roleDisplay = "一般同仁 (Employee)";
           }
           mgrSelect.innerHTML += `<option value="${u.id}">${u.name} (${deptName} · ${u.id}) [${roleDisplay}]</option>`;
@@ -2206,7 +2207,7 @@ const App = {
     });
 
     const banner = document.getElementById("managerAlertBanner");
-    if (isManager && count > 0) {
+    if ((isManager || isAdmin) && count > 0) {
       banner.style.display = "flex";
       document.getElementById("bannerPendingCount").textContent = count;
     } else {
@@ -2246,7 +2247,7 @@ const App = {
     });
 
     const badge = document.getElementById("pendingApprovalBadge");
-    if (isManager && count > 0) {
+    if ((isManager || isAdmin) && count > 0) {
       badge.style.display = "inline-block";
       badge.textContent = count;
     } else {

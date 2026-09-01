@@ -90,5 +90,7 @@ assert(LeaveEngine.isUserAdmin({ id: "EMP003", role: "HR", department_name: "人
 assert(LeaveEngine.isUserAdmin({ id: "EMP004", role: "管理者", department_name: "業務部" }) === true, "中文『管理者』角色應被判定為 Admin 管理者權限");
 assert(LeaveEngine.isUserAdmin({ id: "EMP005", role: "Employee", department_name: "研發部" }) === false, "一般員工不應被判定為 Admin");
 assert(LeaveEngine.isUserManager({ id: "EMP002", role: "Manager", department_name: "研發部" }) === true, "部門主管應被判定為 Manager 權限");
+assert(LeaveEngine.isUserManager({ id: "EMP003", role: "HR", department_name: "人資部" }) === false, "HR 人員不應被判定為 Manager 權限");
+assert(LeaveEngine.isUserManager({ id: "EMP012", role: "Employee", department_name: "管理部" }) === false, "管理部一般同仁 EMP012 不應被判定為 Manager 權限");
 
-console.log("🎉 所有業務核心邏輯、勞基法【歷年制】特休與管理者全域權限單元測試全數通過！");
+console.log("🎉 所有業務核心邏輯、勞基法【歷年制】特休與角色權限劃分單元測試全數通過！");

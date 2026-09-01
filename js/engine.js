@@ -338,16 +338,14 @@ const LeaveEngine = {
   },
 
   /**
-   * 判定使用者是否具備主管權限 (完全以 role 欄位為準)
+   * 判定使用者是否具備主管權限 (純粹以 role 欄位為準)
    */
   isUserManager(user) {
     if (!user) return false;
     const role = (user.role || "").toString().trim().toLowerCase();
     return (
-      this.isUserAdmin(user) ||
       role === "manager" ||
       role === "主管" ||
-      role === "經理" ||
       role === "部門主管"
     );
   }
