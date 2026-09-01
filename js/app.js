@@ -237,7 +237,7 @@ const App = {
    */
   navigate(viewName) {
     const user = this.state.currentUser;
-    const isAdmin = user && (user.role === "Admin" || user.role === "HR");
+    const isAdmin = LeaveEngine.isUserAdmin(user);
 
     // 嚴格權限防護：系統設定專區僅限系統管理者 (Admin) 存取
     if (viewName === "settings" && !isAdmin) {
@@ -785,8 +785,8 @@ const App = {
    */
   renderApprovalsView() {
     const user = this.state.currentUser;
-    const isManager = (user.role === "Manager" || user.role === "Admin");
-    const isAdmin = (user.role === "Admin");
+    const isManager = LeaveEngine.isUserManager(user);
+    const isAdmin = LeaveEngine.isUserAdmin(user);
 
     // 依權限過濾待審清單
     // 請假單待審
@@ -1231,8 +1231,8 @@ const App = {
 
     // 建立請假單 Map (依權限嚴格過濾：管理者看全體、直屬主管看部屬與自己、一般員工僅看自己)
     const currentUser = this.state.currentUser;
-    const isAdmin = currentUser && (currentUser.role === "Admin" || currentUser.role === "HR");
-    const isManager = currentUser && (currentUser.role === "Manager" || currentUser.role === "Admin" || currentUser.role === "HR");
+    const isAdmin = LeaveEngine.isUserAdmin(currentUser);
+    const isManager = LeaveEngine.isUserManager(currentUser);
 
     const activeLeaves = this.state.requests.filter(r => {
       if (r.status !== "APPROVED" && r.status !== "PENDING") return false;
@@ -1329,14 +1329,8 @@ const App = {
     const user = this.state.currentUser;
     if (!user) return;
 
-    const isHrOrAdmin = (
-      user.role === "Admin" ||
-      user.role === "HR" ||
-      user.department_name === "人資部" ||
-      user.department_name === "人力資源部" ||
-      user.department_id === "DEPT_HR"
-    );
-    const isManager = (user.role === "Manager");
+    const isHrOrAdmin = LeaveEngine.isUserAdmin(user);
+    const isManager = LeaveEngine.isUserManager(user);
 
     // 1. 設置身分檢視範圍徽章
     const badgeEl = document.getElementById("historyRoleScopeBadge");
@@ -1417,14 +1411,8 @@ const App = {
     const deptSelect = document.getElementById("historyFilterDept");
     if (!userSelect) return;
 
-    const isHrOrAdmin = (
-      user.role === "Admin" ||
-      user.role === "HR" ||
-      user.department_name === "人資部" ||
-      user.department_name === "人力資源部" ||
-      user.department_id === "DEPT_HR"
-    );
-    const isManager = (user.role === "Manager");
+    const isHrOrAdmin = LeaveEngine.isUserAdmin(user);
+    const isManager = LeaveEngine.isUserManager(user);
     const selectedDept = deptSelect ? deptSelect.value : "ALL";
 
     userSelect.innerHTML = `<option value="ALL">全部同仁 (All Members)</option>`;
@@ -1493,14 +1481,8 @@ const App = {
     const user = this.state.currentUser;
     if (!user) return;
 
-    const isHrOrAdmin = (
-      user.role === "Admin" ||
-      user.role === "HR" ||
-      user.department_name === "人資部" ||
-      user.department_name === "人力資源部" ||
-      user.department_id === "DEPT_HR"
-    );
-    const isManager = (user.role === "Manager");
+    const isHrOrAdmin = LeaveEngine.isUserAdmin(user);
+    const isManager = LeaveEngine.isUserManager(user);
 
     // 1. 取得勾選之假別代碼清單
     const checkedTypes = [];
@@ -2170,8 +2152,8 @@ const App = {
    */
   checkManagerAlert() {
     const user = this.state.currentUser;
-    const isManager = (user.role === "Manager" || user.role === "Admin");
-    const isAdmin = (user.role === "Admin");
+    const isManager = LeaveEngine.isUserManager(user);
+    const isAdmin = LeaveEngine.isUserAdmin(user);
 
     let count = 0;
     this.state.requests.forEach(r => {
@@ -2210,8 +2192,8 @@ const App = {
 
   updatePendingBadges() {
     const user = this.state.currentUser;
-    const isManager = (user.role === "Manager" || user.role === "Admin");
-    const isAdmin = (user.role === "Admin");
+    const isManager = LeaveEngine.isUserManager(user);
+    const isAdmin = LeaveEngine.isUserAdmin(user);
 
     let count = 0;
     this.state.requests.forEach(r => {
@@ -2256,254 +2238,6 @@ const App = {
     if (sidebarSettingsBtn) {
       sidebarSettingsBtn.style.display = isAdmin ? "inline-flex" : "none";
     }
-  },
-
-  /**
-   * 8. 個人差勤歷史紀錄與匯出 (Leave History & Export)
-   */
-  renderHistory() {
-    const user = this.state.currentUser;
-    if (!user) return;
-
-    // 初始化假別下拉選單
-    const typeSelect = document.getElementById("historyFilterLeaveType");
-    if (typeSelect && typeSelect.options.length <= 1) {
-      typeSelect.innerHTML = `<option value="ALL">全部假別 (All Types)</option>`;
-      this.state.leaveTypes.forEach(t => {
-        const opt = document.createElement("option");
-        opt.value = t.id;
-        opt.textContent = t.name;
-        typeSelect.appendChild(opt);
-      });
-    }
-
-    // 預設篩選區間 (今年 2026-01-01 ~ 2026-12-31)
-    if (!document.getElementById("historyFilterStartDate").value) {
-      const year = SYSTEM_CONFIG.CURRENT_YEAR || 2026;
-      document.getElementById("historyFilterStartDate").value = `${year}-01-01`;
-      document.getElementById("historyFilterEndDate").value = `${year}-12-31`;
-    }
-
-    this.applyHistoryFilter();
-  },
-
-  setHistoryPresetRange(preset) {
-    const today = new Date();
-    const todayStr = LeaveEngine.formatDateOnly(today);
-    const startInput = document.getElementById("historyFilterStartDate");
-    const endInput = document.getElementById("historyFilterEndDate");
-
-    switch (preset) {
-      case "this_month": {
-        const y = today.getFullYear();
-        const m = ("0" + (today.getMonth() + 1)).slice(-2);
-        const lastDay = new Date(y, today.getMonth() + 1, 0).getDate();
-        startInput.value = `${y}-${m}-01`;
-        endInput.value = `${y}-${m}-${lastDay}`;
-        break;
-      }
-      case "this_year": {
-        const y = today.getFullYear();
-        startInput.value = `${y}-01-01`;
-        endInput.value = `${y}-12-31`;
-        break;
-      }
-      case "last_3_months": {
-        const start = new Date(today);
-        start.setMonth(start.getMonth() - 3);
-        startInput.value = LeaveEngine.formatDateOnly(start);
-        endInput.value = todayStr;
-        break;
-      }
-      case "all": {
-        startInput.value = "";
-        endInput.value = "";
-        break;
-      }
-    }
-    this.applyHistoryFilter();
-  },
-
-  resetHistoryFilter() {
-    document.getElementById("historyFilterLeaveType").value = "ALL";
-    document.getElementById("historyFilterStatus").value = "ALL";
-    document.getElementById("historyFilterStartDate").value = "";
-    document.getElementById("historyFilterEndDate").value = "";
-    document.getElementById("historyFilterKeyword").value = "";
-    this.applyHistoryFilter();
-  },
-
-  getFilteredHistoryRequests() {
-    const user = this.state.currentUser;
-    if (!user) return [];
-
-    const typeFilter = document.getElementById("historyFilterLeaveType") ? document.getElementById("historyFilterLeaveType").value : "ALL";
-    const statusFilter = document.getElementById("historyFilterStatus") ? document.getElementById("historyFilterStatus").value : "ALL";
-    const startDate = document.getElementById("historyFilterStartDate") ? document.getElementById("historyFilterStartDate").value : "";
-    const endDate = document.getElementById("historyFilterEndDate") ? document.getElementById("historyFilterEndDate").value : "";
-    const keyword = document.getElementById("historyFilterKeyword") ? document.getElementById("historyFilterKeyword").value.trim().toLowerCase() : "";
-
-    return this.state.requests.filter(req => {
-      // 僅顯示當前使用者
-      if (req.user_id !== user.id) return false;
-
-      // 假別篩選
-      if (typeFilter !== "ALL" && req.leave_type_id !== typeFilter) return false;
-
-      // 狀態篩選
-      if (statusFilter !== "ALL" && req.status !== statusFilter) return false;
-
-      // 日期區間篩選 (以請假開始時間比對)
-      const reqDate = req.start_time ? req.start_time.substring(0, 10) : "";
-      if (startDate && reqDate < startDate) return false;
-      if (endDate && reqDate > endDate) return false;
-
-      // 關鍵字搜尋 (單號、事由)
-      if (keyword) {
-        const idMatch = req.id && req.id.toLowerCase().includes(keyword);
-        const reasonMatch = req.reason && req.reason.toLowerCase().includes(keyword);
-        if (!idMatch && !reasonMatch) return false;
-      }
-
-      return true;
-    });
-  },
-
-  applyHistoryFilter() {
-    const filtered = this.getFilteredHistoryRequests();
-    const tbody = document.getElementById("historyTableBody");
-    if (!tbody) return;
-
-    tbody.innerHTML = "";
-
-    // 計算統計摘要
-    let totalCount = filtered.length;
-    let totalHours = 0;
-    let approvedHours = 0;
-    let pendingHours = 0;
-    const typeDistribution = {};
-
-    filtered.forEach(req => {
-      const h = parseFloat(req.total_hours) || 0;
-      totalHours += h;
-      if (req.status === "APPROVED") approvedHours += h;
-      if (req.status === "PENDING") pendingHours += h;
-
-      typeDistribution[req.leave_type_id] = (typeDistribution[req.leave_type_id] || 0) + h;
-    });
-
-    // 更新指標卡片
-    document.getElementById("historyStatCount").textContent = `${totalCount} 筆`;
-    document.getElementById("historyStatHours").textContent = `${totalHours.toFixed(1)} h (${(totalHours / 8.0).toFixed(1)} 天)`;
-    document.getElementById("historyStatApprovedHours").textContent = `${approvedHours.toFixed(1)} h`;
-    document.getElementById("historyStatPendingHours").textContent = `${pendingHours.toFixed(1)} h`;
-
-    // 假別分佈小標籤
-    const distContainer = document.getElementById("historyTypeDistribution");
-    if (distContainer) {
-      distContainer.innerHTML = "";
-      Object.keys(typeDistribution).forEach(typeId => {
-        const typeDef = SYSTEM_CONFIG.LEAVE_TYPES.find(t => t.id === typeId) || { name: typeId };
-        const badge = document.createElement("span");
-        badge.className = `badge ${typeDef.badgeClass || 'badge-blue'}`;
-        badge.style.fontSize = "0.78rem";
-        badge.textContent = `${typeDef.name}: ${typeDistribution[typeId]}h`;
-        distContainer.appendChild(badge);
-      });
-    }
-
-    // 渲染表格內容
-    if (filtered.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="10" style="text-align: center; color: var(--text-muted); padding: 32px;"><i class="fa-solid fa-inbox" style="font-size: 1.8rem; margin-bottom: 8px; display: block;"></i>無符合篩選條件的差勤紀錄</td></tr>`;
-      return;
-    }
-
-    filtered.forEach(req => {
-      const typeDef = SYSTEM_CONFIG.LEAVE_TYPES.find(t => t.id === req.leave_type_id) || { name: req.leave_type_id };
-      const statusBadge = this.getStatusBadgeHtml(req.status, req.current_step);
-      const isPaid = typeDef.isPaid;
-
-      let actionBtn = "";
-      if (req.status === "PENDING") {
-        actionBtn = `<button class="btn btn-sm btn-secondary" style="color: var(--danger); padding: 3px 8px;" onclick="App.handleCancelClick('${req.id}', 'PENDING')">
-          <i class="fa-solid fa-xmark"></i> 撤銷
-        </button>`;
-      } else if (req.status === "APPROVED") {
-        actionBtn = `<button class="btn btn-sm btn-secondary" style="color: var(--purple); padding: 3px 8px;" onclick="App.handleCancelClick('${req.id}', 'APPROVED')">
-          <i class="fa-solid fa-arrow-rotate-left"></i> 銷假
-        </button>`;
-      } else {
-        actionBtn = `<span style="color: var(--text-muted); font-size: 0.8rem;">-</span>`;
-      }
-
-      const attachHtml = req.attachment_url ? `<a href="${req.attachment_url}" target="_blank" class="btn btn-sm btn-secondary" style="padding: 2px 6px; font-size: 0.75rem;"><i class="fa-solid fa-paperclip"></i> 檢視</a>` : `<span style="color: var(--text-muted); font-size: 0.78rem;">無</span>`;
-
-      const tr = document.createElement("tr");
-      tr.innerHTML = `
-        <td><strong style="color: var(--primary); font-family: 'JetBrains Mono';">${req.id}</strong></td>
-        <td><span class="badge ${typeDef.badgeClass || 'badge-blue'}">${typeDef.name}</span></td>
-        <td><span class="badge ${isPaid ? 'badge-blue' : 'badge-amber'}">${isPaid ? '全薪' : '不支薪'}</span></td>
-        <td>
-          <div style="font-weight: 500;">${req.start_time}</div>
-          <div style="font-size: 0.8rem; color: var(--text-muted);">至 ${req.end_time}</div>
-        </td>
-        <td><strong style="color: var(--text-main); font-family: 'JetBrains Mono'; font-size: 0.95rem;">${req.total_hours}</strong> 小時</td>
-        <td style="max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${req.reason || ''}">${req.reason || '-'}</td>
-        <td>${attachHtml}</td>
-        <td>${statusBadge}</td>
-        <td style="font-size: 0.8rem; color: var(--text-muted);">${req.applied_at || '-'}</td>
-        <td>${actionBtn}</td>
-      `;
-      tbody.appendChild(tr);
-    });
-  },
-
-  exportHistoryCsv() {
-    const user = this.state.currentUser;
-    if (!user) return;
-
-    const filtered = this.getFilteredHistoryRequests();
-    if (filtered.length === 0) {
-      this.showToast("目前篩選條件下無任何紀錄可供匯出！", "warning");
-      return;
-    }
-
-    // 準備 CSV Header 與資料列 (加入 UTF-8 BOM 避免 Excel 亂碼)
-    const headers = ["單號", "申請人姓名", "員工編號", "所屬部門", "假別名稱", "薪資給付屬性", "請假開始時間", "請假結束時間", "請假工時(小時)", "申請事由", "審核狀態", "審核階層", "申請時間"];
-    
-    const rows = filtered.map(req => {
-      const typeDef = SYSTEM_CONFIG.LEAVE_TYPES.find(t => t.id === req.leave_type_id) || { name: req.leave_type_id };
-      const statusText = req.status === "APPROVED" ? "已核准" : (req.status === "PENDING" ? "待審核" : (req.status === "REJECTED" ? "已駁回" : "已撤銷/銷假"));
-      return [
-        req.id,
-        user.name,
-        user.id,
-        user.department_name || user.department_id,
-        typeDef.name,
-        typeDef.isPaid ? "全薪" : "不支薪",
-        req.start_time,
-        req.end_time,
-        req.total_hours,
-        `"${(req.reason || '').replace(/"/g, '""')}"`,
-        statusText,
-        req.current_step || "",
-        req.applied_at || ""
-      ];
-    });
-
-    let csvContent = "\uFEFF" + headers.join(",") + "\n" + rows.map(r => r.join(",")).join("\n");
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    const dateStr = LeaveEngine.formatDateOnly(new Date()).replace(/-/g, "");
-    link.setAttribute("href", url);
-    link.setAttribute("download", `個人請假歷史紀錄_${user.name}_${user.id}_${dateStr}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-
-    this.showToast(`已成功匯出 ${filtered.length} 筆請假歷史紀錄為 CSV 報表！`, "success");
   },
 
   closeModal(modalId) {

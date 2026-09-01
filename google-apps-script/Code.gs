@@ -166,9 +166,9 @@ function initDatabase() {
   // 1. users 表 (新增 hire_date 到職日欄位，涵蓋 8 大部門)
   const userHeaders = ["id", "name", "email", "password_hash", "department_id", "department_name", "manager_id", "role", "hire_date", "created_at"];
   const userSeeds = [
-    ["EMP001", "王小明", "employee@company.com", "123456", "DEPT_RD", "研發部", "EMP002", "Employee", "2024-03-01", "2026-01-01 09:00:00"],
-    ["EMP002", "陳主管", "manager@company.com", "123456", "DEPT_RD", "研發部", "EMP003", "Manager", "2023-01-15", "2026-01-01 09:00:00"],
-    ["EMP003", "林經理 (HR/Admin)", "admin@company.com", "123456", "DEPT_HR", "人資部", "", "Admin", "2020-07-01", "2026-01-01 09:00:00"],
+    ["EMP001", "李泰叡", "admin@company.com", "123456", "DEPT_MGMT", "管理部", "", "Admin", "2024-03-01", "2026-01-01 09:00:00"],
+    ["EMP002", "陳主管", "manager@company.com", "123456", "DEPT_RD", "研發部", "EMP001", "Manager", "2023-01-15", "2026-01-01 09:00:00"],
+    ["EMP003", "林經理 (HR/Admin)", "hr_admin@company.com", "123456", "DEPT_HR", "人資部", "", "Admin", "2020-07-01", "2026-01-01 09:00:00"],
     ["EMP004", "張業務", "sales@company.com", "123456", "DEPT_SALES", "業務部", "EMP002", "Employee", "2025-10-01", "2026-01-01 09:00:00"],
     ["EMP005", "李設計", "design@company.com", "123456", "DEPT_DESIGN", "設計部", "EMP002", "Employee", "2024-08-01", "2026-01-01 09:00:00"],
     ["EMP006", "周工程", "eng@company.com", "123456", "DEPT_ENG", "工程部", "EMP002", "Employee", "2024-05-01", "2026-01-01 09:00:00"],

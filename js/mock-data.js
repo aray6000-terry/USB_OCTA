@@ -8,13 +8,13 @@ const MockDataEngine = {
       users: [
         {
           id: "EMP001",
-          name: "王小明",
-          email: "employee@company.com",
+          name: "李泰叡",
+          email: "admin@company.com",
           password_hash: "123456",
-          department_id: "DEPT_RD",
-          department_name: "研發部",
-          manager_id: "EMP002",
-          role: "Employee",
+          department_id: "DEPT_MGMT",
+          department_name: "管理部",
+          manager_id: "",
+          role: "Admin",
           hire_date: "2024-03-01",
           created_at: "2026-01-01 09:00:00"
         },
