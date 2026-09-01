@@ -318,34 +318,27 @@ const LeaveEngine = {
   },
 
   /**
-   * 判定使用者是否具備管理者/人資權限 (可檢視全公司所有紀錄、核准二階簽核、進入系統設定)
+   * 判定使用者是否具備管理者/人資權限 (完全以 role 欄位為準)
    */
   isUserAdmin(user) {
     if (!user) return false;
     const id = (user.id || "").toString().trim().toUpperCase();
     const role = (user.role || "").toString().trim().toLowerCase();
-    const dept = (user.department_name || "").toString().trim();
-    const deptId = (user.department_id || "").toString().trim().toUpperCase();
 
     return (
       id === "EMP001" ||
-      id === "EMP003" ||
       role === "admin" ||
       role === "hr" ||
-      role.includes("admin") ||
-      role.includes("hr") ||
-      role.includes("管理") ||
-      role.includes("人資") ||
-      dept === "人資部" ||
-      dept === "人力資源部" ||
-      dept === "管理部" ||
-      deptId === "DEPT_HR" ||
-      deptId === "DEPT_MGMT"
+      role === "管理者" ||
+      role === "管理員" ||
+      role === "人資" ||
+      role === "超級管理員" ||
+      role === "超級管理者"
     );
   },
 
   /**
-   * 判定使用者是否具備主管權限 (可審核下屬、檢視轄下與個人明細)
+   * 判定使用者是否具備主管權限 (完全以 role 欄位為準)
    */
   isUserManager(user) {
     if (!user) return false;
@@ -353,10 +346,9 @@ const LeaveEngine = {
     return (
       this.isUserAdmin(user) ||
       role === "manager" ||
-      role.includes("manager") ||
-      role.includes("主管") ||
-      role.includes("經理") ||
-      role.includes("長")
+      role === "主管" ||
+      role === "經理" ||
+      role === "部門主管"
     );
   }
 };

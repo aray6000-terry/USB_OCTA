@@ -1938,16 +1938,25 @@ const App = {
     document.getElementById("newUserHireDate").value = LeaveEngine.formatDateOnly(new Date());
     document.getElementById("newUserPassword").value = "123456";
 
-    // 動態由 Google Sheet (this.state.users) 載入實際存在之員工與主管選項
+    // 動態由 Google Sheet (this.state.users) 載入實際存在之同仁名冊，並 100% 呈現其在 Sheet 中的真實 role 角色
     const mgrSelect = document.getElementById("newUserManager");
     if (mgrSelect) {
       mgrSelect.innerHTML = `<option value="">-- 無直屬主管 (最高主管/自簽) --</option>`;
       if (this.state.users && this.state.users.length > 0) {
         this.state.users.forEach(u => {
-          const isMgr = LeaveEngine.isUserManager(u);
-          const roleTag = isMgr ? " [主管/管理者]" : "";
-          const deptName = u.department_name || u.department_id || "";
-          mgrSelect.innerHTML += `<option value="${u.id}">${u.name} (${deptName} · ${u.id})${roleTag}</option>`;
+          const deptName = u.department_name || u.department_id || "未設部門";
+          const rawRole = (u.role || "Employee").toString().trim();
+          let roleDisplay = rawRole;
+          if (rawRole === "Admin" || rawRole === "管理者" || rawRole === "管理員") {
+            roleDisplay = "最高管理者 (Admin)";
+          } else if (rawRole === "Manager" || rawRole === "主管" || rawRole === "經理") {
+            roleDisplay = "部門主管 (Manager)";
+          } else if (rawRole === "HR" || rawRole === "人資") {
+            roleDisplay = "人事管理 (HR)";
+          } else if (rawRole === "Employee" || rawRole === "一般同仁") {
+            roleDisplay = "一般同仁 (Employee)";
+          }
+          mgrSelect.innerHTML += `<option value="${u.id}">${u.name} (${deptName} · ${u.id}) [${roleDisplay}]</option>`;
         });
       }
     }
