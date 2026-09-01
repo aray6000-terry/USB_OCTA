@@ -156,73 +156,112 @@ const LeaveEngine = {
   },
 
   /**
-   * 依照台灣勞動基準法第38條計算特別休假 (Annual Leave based on Taiwan Labor Standards Act)
+   * 依照台灣勞動基準法第38條施行細則第24條之1【歷年制】計算特別休假 (每年 1/1 ~ 12/31 重新核算)
    * @param {string|Date} hireDate 到職日 (YYYY-MM-DD)
-   * @param {string|Date} asOfDate 基準日 (預設為今日)
-   * @returns {Object} { years, months, totalMonths, days, hours, description }
+   * @param {number|Date} asOfYearOrDate 結算年度 (數字如 2026 或 Date)
+   * @returns {Object} { year, years, months, totalMonths, days, hours, tierDesc, seniorityText, description }
    */
-  calculateStatutoryAnnualLeave(hireDate, asOfDate = new Date()) {
-    if (!hireDate) return { years: 0, months: 0, totalMonths: 0, days: 0, hours: 0, description: "尚未設定到職日" };
+  calculateStatutoryAnnualLeave(hireDate, asOfYearOrDate = 2026) {
+    const targetYear = typeof asOfYearOrDate === "number" ? asOfYearOrDate : (asOfYearOrDate instanceof Date ? asOfYearOrDate.getFullYear() : 2026);
+    if (!hireDate) return { year: targetYear, years: 0, months: 0, totalMonths: 0, days: 0, hours: 0, tierDesc: "--", seniorityText: "--", description: "尚未設定到職日" };
 
     const h = new Date(hireDate);
-    const now = new Date(asOfDate);
-    if (isNaN(h.getTime()) || h > now) {
-      return { years: 0, months: 0, totalMonths: 0, days: 0, hours: 0, description: "到職日無效或晚於當前日期" };
+    if (isNaN(h.getTime())) {
+      return { year: targetYear, years: 0, months: 0, totalMonths: 0, days: 0, hours: 0, tierDesc: "--", seniorityText: "--", description: "到職日無效" };
     }
 
-    let years = now.getFullYear() - h.getFullYear();
-    let months = now.getMonth() - h.getMonth();
-    let daysDiff = now.getDate() - h.getDate();
+    const yearStart = new Date(targetYear, 0, 1);
+    const yearEnd = new Date(targetYear, 11, 31);
+    const totalYearDays = Math.round((yearEnd - yearStart) / (1000 * 60 * 60 * 24)) + 1; // 365 或 366 天
 
-    if (daysDiff < 0) {
-      months -= 1;
+    if (h > yearEnd) {
+      return {
+        year: targetYear,
+        years: 0,
+        months: 0,
+        totalMonths: 0,
+        days: 0,
+        hours: 0,
+        tierDesc: "該年度尚未到職",
+        seniorityText: "未到職",
+        description: `員工於 ${LeaveEngine.formatDateOnly(h)} 到職，在 ${targetYear} 年度尚未起算年資。`
+      };
     }
+
+    // 截至當年度 12/31 之累計年資
+    let years = targetYear - h.getFullYear();
+    let months = 11 - h.getMonth();
+    let daysDiff = 31 - h.getDate();
+    if (daysDiff < 0) months -= 1;
     if (months < 0) {
       years -= 1;
       months += 12;
     }
-    const totalMonths = years * 12 + months;
+    const totalMonths = Math.max(0, years * 12 + months);
 
-    let statutoryDays = 0;
-    let tierDesc = "";
-
-    // 勞基法第38條規定
-    if (totalMonths < 6) {
-      statutoryDays = 0;
-      tierDesc = "未滿 6 個月：0 天";
-    } else if (totalMonths >= 6 && totalMonths < 12) {
-      statutoryDays = 3;
-      tierDesc = "滿 6 個月以上未滿 1 年：3 天 (24 小時)";
-    } else if (years === 1) {
-      statutoryDays = 7;
-      tierDesc = "滿 1 年以上未滿 2 年：7 天 (56 小時)";
-    } else if (years === 2) {
-      statutoryDays = 10;
-      tierDesc = "滿 2 年以上未滿 3 年：10 天 (80 小時)";
-    } else if (years >= 3 && years < 5) {
-      statutoryDays = 14;
-      tierDesc = "滿 3 年以上未滿 5 年：每年 14 天 (112 小時)";
-    } else if (years >= 5 && years < 10) {
-      statutoryDays = 15;
-      tierDesc = "滿 5 年以上未滿 10 年：每年 15 天 (120 小時)";
-    } else if (years >= 10) {
-      // 滿 10 年以上：每滿 1 年加給 1 天，加至 30 天為止
-      const calculated = 15 + (years - 9);
-      statutoryDays = Math.min(30, calculated);
-      tierDesc = `滿 10 年以上 (滿 ${years} 年)：${statutoryDays} 天 (${statutoryDays * 8} 小時)`;
+    // 勞基法週年法定基準天數表
+    function getAnniversaryDays(n) {
+      if (n < 0.5) return 0;
+      if (n >= 0.5 && n < 1) return 3;
+      if (n === 1) return 7;
+      if (n === 2) return 10;
+      if (n === 3 || n === 4) return 14;
+      if (n >= 5 && n < 10) return 15;
+      if (n >= 10) return Math.min(30, 15 + (n - 9));
+      return 0;
     }
 
-    const statutoryHours = statutoryDays * 8.0;
+    let statutoryDays = 0;
+    let formulaDesc = "";
+
+    // 1. 若為當年度內到職
+    if (h.getFullYear() === targetYear) {
+      const sixMonthDate = new Date(h);
+      sixMonthDate.setMonth(sixMonthDate.getMonth() + 6);
+      if (sixMonthDate <= yearEnd) {
+        statutoryDays = 3.0;
+        formulaDesc = `當年度滿半年取得 3 天 (${LeaveEngine.formatDateOnly(sixMonthDate)} 起可休)`;
+      } else {
+        statutoryDays = 0.0;
+        formulaDesc = "當年度未滿 6 個月：0 天";
+      }
+    } else {
+      // 2. 前一年度或更早到職：以到職週年日切分前後段比例
+      const anniversary = new Date(targetYear, h.getMonth(), h.getDate());
+      const priorYears = targetYear - h.getFullYear() - 1; // 1/1~週年日前之完整年資
+      const nextYears = priorYears + 1; // 週年日後之完整年資
+
+      const d1 = Math.max(0, Math.floor((anniversary - yearStart) / (1000 * 60 * 60 * 24)));
+      const d2 = totalYearDays - d1;
+
+      let part1Days = 0;
+      if (priorYears === 0) {
+        const sixMonthDate = new Date(h);
+        sixMonthDate.setMonth(sixMonthDate.getMonth() + 6);
+        part1Days = (sixMonthDate <= yearStart) ? 3.0 : 0.0;
+      } else {
+        part1Days = getAnniversaryDays(priorYears) * (d1 / totalYearDays);
+      }
+
+      const part2Days = getAnniversaryDays(nextYears) * (d2 / totalYearDays);
+      const totalRaw = part1Days + part2Days;
+      statutoryDays = Math.round(totalRaw * 10) / 10;
+
+      formulaDesc = `歷年制分段：前段(${priorYears}年: ${part1Days.toFixed(1)}天) + 後段(${nextYears}年: ${part2Days.toFixed(1)}天) = ${statutoryDays} 天`;
+    }
+
+    const statutoryHours = Math.round(statutoryDays * 8.0 * 10) / 10;
 
     return {
+      year: targetYear,
       years,
       months,
       totalMonths,
       days: statutoryDays,
       hours: statutoryHours,
-      tierDesc,
+      tierDesc: formulaDesc,
       seniorityText: `${years} 年 ${months} 個月`,
-      description: `年資 ${years} 年 ${months} 個月，依勞基法第38條核給特休 ${statutoryDays} 天 (${statutoryHours} 小時)`
+      description: `${targetYear} 歷年制核算：年資 ${years} 年 ${months} 個月，核發特休 ${statutoryDays} 天 (${statutoryHours} 小時)`
     };
   },
 

@@ -751,12 +751,12 @@
               <strong>系統設定權限說明：</strong> Google Apps Script / Google Sheet 後端串接與進階參數設定僅限<strong>管理者 (Admin)</strong> 進行配置。
             </div>
 
-            <!-- 全員到職日與勞基法特休假管理面板 (置頂主要維護區) -->
+            <!-- 全員到職日與勞基法歷年制特休管理面板 (置頂主要維護區) -->
             <div class="form-card" style="max-width: 100%;">
               <div class="panel-header">
                 <div class="panel-title">
                   <i class="fa-solid fa-users-gear" style="color: var(--primary);"></i>
-                  全員到職日與勞基法第38條特休額度核算
+                  全員到職日與勞基法【歷年制】特休額度核算 (每年 1/1 重新起算)
                 </div>
                 <div style="display: flex; gap: 8px; flex-wrap: wrap;">
                   <button class="btn btn-sm btn-primary" onclick="App.openAddUserModal()">
@@ -771,7 +771,7 @@
                 </div>
               </div>
               <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 16px;">
-                系統將依據 <code>users</code> 分頁之到職日 (<code>hire_date</code>)，自動依勞基法第38條法規級距核發特休天數與小時，並寫入 <code>leave_balances</code> 分頁對應 ID 的 <code>ANNUAL</code> 額度。
+                系統採用勞動基準法第38條施行細則第24條之1【<strong>歷年制</strong>】，每年 1 月 1 日依員工到職日 (<code>hire_date</code>) 按比例自動核發當年度特休天數；<strong>每年度終了未休畢之剩餘特休，自動列入「薪資發放抵銷（薪資折現補償）」</strong>。
               </p>
               <div class="table-responsive">
                 <table class="custom-table">
@@ -781,10 +781,10 @@
                       <th>姓名</th>
                       <th>部門 / 角色</th>
                       <th>到職日 (hire_date)</th>
-                      <th>計算年資</th>
-                      <th>勞基法特休天數</th>
-                      <th>換算總工時</th>
-                      <th>leave_balances (ANNUAL)</th>
+                      <th>截至12/31年資</th>
+                      <th>歷年制特休天數</th>
+                      <th>年度核定特休 (ANNUAL)</th>
+                      <th>未休特休薪資抵銷 (Encashment)</th>
                       <th>操作</th>
                     </tr>
                   </thead>

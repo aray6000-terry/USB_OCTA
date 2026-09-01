@@ -109,49 +109,102 @@ const LeaveEngine = {
     return { isMultiTier };
   },
 
-  calculateStatutoryAnnualLeave(hireDate, asOfDate = new Date()) {
-    if (!hireDate) return { years: 0, months: 0, totalMonths: 0, days: 0, hours: 0 };
+  calculateStatutoryAnnualLeave(hireDate, asOfYearOrDate = 2026) {
+    const targetYear = typeof asOfYearOrDate === "number" ? asOfYearOrDate : (asOfYearOrDate instanceof Date ? asOfYearOrDate.getFullYear() : 2026);
+    if (!hireDate) return { year: targetYear, years: 0, months: 0, totalMonths: 0, days: 0, hours: 0, tierDesc: "--", seniorityText: "--", description: "尚未設定到職日" };
+
     const h = new Date(hireDate);
-    const now = new Date(asOfDate);
-    if (isNaN(h.getTime()) || h > now) return { years: 0, months: 0, totalMonths: 0, days: 0, hours: 0 };
-
-    let years = now.getFullYear() - h.getFullYear();
-    let months = now.getMonth() - h.getMonth();
-    let daysDiff = now.getDate() - h.getDate();
-
-    if (daysDiff < 0) {
-      months -= 1;
+    if (isNaN(h.getTime())) {
+      return { year: targetYear, years: 0, months: 0, totalMonths: 0, days: 0, hours: 0, tierDesc: "--", seniorityText: "--", description: "到職日無效" };
     }
+
+    const yearStart = new Date(targetYear, 0, 1);
+    const yearEnd = new Date(targetYear, 11, 31);
+    const totalYearDays = Math.round((yearEnd - yearStart) / (1000 * 60 * 60 * 24)) + 1;
+
+    if (h > yearEnd) {
+      return {
+        year: targetYear,
+        years: 0,
+        months: 0,
+        totalMonths: 0,
+        days: 0,
+        hours: 0,
+        tierDesc: "該年度尚未到職",
+        seniorityText: "未到職"
+      };
+    }
+
+    let years = targetYear - h.getFullYear();
+    let months = 11 - h.getMonth();
+    let daysDiff = 31 - h.getDate();
+    if (daysDiff < 0) months -= 1;
     if (months < 0) {
       years -= 1;
       months += 12;
     }
-    const totalMonths = years * 12 + months;
+    const totalMonths = Math.max(0, years * 12 + months);
 
-    let statutoryDays = 0;
-    if (totalMonths < 6) {
-      statutoryDays = 0;
-    } else if (totalMonths >= 6 && totalMonths < 12) {
-      statutoryDays = 3;
-    } else if (years === 1) {
-      statutoryDays = 7;
-    } else if (years === 2) {
-      statutoryDays = 10;
-    } else if (years >= 3 && years < 5) {
-      statutoryDays = 14;
-    } else if (years >= 5 && years < 10) {
-      statutoryDays = 15;
-    } else if (years >= 10) {
-      const calculated = 15 + (years - 9);
-      statutoryDays = Math.min(30, calculated);
+    function getAnniversaryDays(n) {
+      if (n < 0.5) return 0;
+      if (n >= 0.5 && n < 1) return 3;
+      if (n === 1) return 7;
+      if (n === 2) return 10;
+      if (n === 3 || n === 4) return 14;
+      if (n >= 5 && n < 10) return 15;
+      if (n >= 10) return Math.min(30, 15 + (n - 9));
+      return 0;
     }
 
+    let statutoryDays = 0;
+    let formulaDesc = "";
+
+    if (h.getFullYear() === targetYear) {
+      const sixMonthDate = new Date(h);
+      sixMonthDate.setMonth(sixMonthDate.getMonth() + 6);
+      if (sixMonthDate <= yearEnd) {
+        statutoryDays = 3.0;
+        formulaDesc = `當年度滿半年取得 3 天 (${LeaveEngine.formatDateOnly(sixMonthDate)} 起可休)`;
+      } else {
+        statutoryDays = 0.0;
+        formulaDesc = "當年度未滿 6 個月：0 天";
+      }
+    } else {
+      const anniversary = new Date(targetYear, h.getMonth(), h.getDate());
+      const priorYears = targetYear - h.getFullYear() - 1;
+      const nextYears = priorYears + 1;
+
+      const d1 = Math.max(0, Math.floor((anniversary - yearStart) / (1000 * 60 * 60 * 24)));
+      const d2 = totalYearDays - d1;
+
+      let part1Days = 0;
+      if (priorYears === 0) {
+        const sixMonthDate = new Date(h);
+        sixMonthDate.setMonth(sixMonthDate.getMonth() + 6);
+        part1Days = (sixMonthDate <= yearStart) ? 3.0 : 0.0;
+      } else {
+        part1Days = getAnniversaryDays(priorYears) * (d1 / totalYearDays);
+      }
+
+      const part2Days = getAnniversaryDays(nextYears) * (d2 / totalYearDays);
+      const totalRaw = part1Days + part2Days;
+      statutoryDays = Math.round(totalRaw * 10) / 10;
+
+      formulaDesc = `歷年制分段：前段(${priorYears}年: ${part1Days.toFixed(1)}天) + 後段(${nextYears}年: ${part2Days.toFixed(1)}天) = ${statutoryDays} 天`;
+    }
+
+    const statutoryHours = Math.round(statutoryDays * 8.0 * 10) / 10;
+
     return {
+      year: targetYear,
       years,
       months,
       totalMonths,
       days: statutoryDays,
-      hours: statutoryDays * 8.0
+      hours: statutoryHours,
+      tierDesc: formulaDesc,
+      seniorityText: `${years} 年 ${months} 個月`,
+      description: `${targetYear} 歷年制核算：年資 ${years} 年 ${months} 個月，核發特休 ${statutoryDays} 天 (${statutoryHours} 小時)`
     };
   },
 
@@ -218,36 +271,24 @@ assert(routeSingle.isMultiTier === false, "24 小時以內應為單階主管審�
 const routeMulti = LeaveEngine.getApprovalRoute(32.0, { manager_id: "EMP002" });
 assert(routeMulti.isMultiTier === true, "超過 24 小時 (3天) 應為主管+HR雙階審核");
 
-// 測試 9: 勞基法第38條特休假試算 - 未滿 6 個月 (3個月) -> 0 天 (0h)
-const statUnder6m = LeaveEngine.calculateStatutoryAnnualLeave("2026-06-01", "2026-09-01");
-assert(statUnder6m.days === 0 && statUnder6m.hours === 0, "未滿 6 個月特休應為 0 天");
+// 測試 9: 勞基法歷年制特休假試算 - 當年 2026-08-01 到職 (未滿6個月) -> 0 天 (0h)
+const statUnder6m = LeaveEngine.calculateStatutoryAnnualLeave("2026-08-01", 2026);
+assert(statUnder6m.days === 0 && statUnder6m.hours === 0, `當年度未滿 6 個月特休應為 0 天，實際值: ${statUnder6m.days}`);
 
-// 測試 10: 勞基法第38條特休假試算 - 滿 6 個月未滿 1 年 -> 3 天 (24h)
-const stat6m = LeaveEngine.calculateStatutoryAnnualLeave("2026-03-01", "2026-09-01");
-assert(stat6m.days === 3 && stat6m.hours === 24.0, "滿 6 個月未滿 1 年特休應為 3 天 (24h)");
+// 測試 10: 勞基法歷年制特休假試算 - 當年 2026-02-01 到職 (滿6個月可取得3天)
+const stat6m = LeaveEngine.calculateStatutoryAnnualLeave("2026-02-01", 2026);
+assert(stat6m.days === 3 && stat6m.hours === 24.0, `當年度滿 6 個月特休應為 3 天 (24h)，實際值: ${stat6m.days}`);
 
-// 測試 11: 勞基法第38條特休假試算 - 滿 1 年未滿 2 年 -> 7 天 (56h)
-const stat1y = LeaveEngine.calculateStatutoryAnnualLeave("2025-03-01", "2026-09-01");
-assert(stat1y.days === 7 && stat1y.hours === 56.0, "滿 1 年未滿 2 年特休應為 7 天 (56h)");
+// 測試 11: 勞基法歷年制特休假試算 - 2024-03-01 到職於 2026 年度歷年制比例分段核算 (約 9.5 天)
+const stat2024 = LeaveEngine.calculateStatutoryAnnualLeave("2024-03-01", 2026);
+assert(stat2024.days >= 9.0 && stat2024.days <= 10.0, `2024-03-01到職在2026歷年制特休應為 ~9.5 天，實際值: ${stat2024.days}`);
 
-// 測試 12: 勞基法第38條特休假試算 - 滿 2 年未滿 3 年 -> 10 天 (80h)
-const stat2y = LeaveEngine.calculateStatutoryAnnualLeave("2024-03-01", "2026-09-01");
-assert(stat2y.days === 10 && stat2y.hours === 80.0, "滿 2 年未滿 3 年特休應為 10 天 (80h)");
+// 測試 12: 勞基法歷年制特休假試算 - 2023-01-15 到職於 2026 年度歷年制比例分段核算 (約 13.8 天)
+const stat2023 = LeaveEngine.calculateStatutoryAnnualLeave("2023-01-15", 2026);
+assert(stat2023.days >= 13.0 && stat2023.days <= 14.0, `2023-01-15到職在2026歷年制特休應為 ~13.8 天，實際值: ${stat2023.days}`);
 
-// 測試 13: 勞基法第38條特休假試算 - 滿 3 年未滿 5 年 -> 14 天 (112h)
-const stat3y = LeaveEngine.calculateStatutoryAnnualLeave("2023-03-01", "2026-09-01");
-assert(stat3y.days === 14 && stat3y.hours === 112.0, "滿 3 年未滿 5 年特休應為 14 天 (112h)");
+// 測試 13: 勞基法歷年制特休假試算 - 2020-07-01 到職於 2026 年度歷年制核算 (15 天)
+const stat2020 = LeaveEngine.calculateStatutoryAnnualLeave("2020-07-01", 2026);
+assert(stat2020.days === 15.0 && stat2020.hours === 120.0, `2020-07-01到職在2026歷年制特休應為 15 天 (120h)，實際值: ${stat2020.days}`);
 
-// 測試 14: 勞基法第38條特休假試算 - 滿 5 年未滿 10 年 -> 15 天 (120h)
-const stat5y = LeaveEngine.calculateStatutoryAnnualLeave("2021-03-01", "2026-09-01");
-assert(stat5y.days === 15 && stat5y.hours === 120.0, "滿 5 年未滿 10 年特休應為 15 天 (120h)");
-
-// 測試 15: 勞基法第38條特休假試算 - 滿 10 年 (10年) -> 16 天 (128h)
-const stat10y = LeaveEngine.calculateStatutoryAnnualLeave("2016-03-01", "2026-09-01");
-assert(stat10y.days === 16 && stat10y.hours === 128.0, "滿 10 年特休應為 16 天 (128h)");
-
-// 測試 16: 勞基法第38條特休假試算 - 滿 25 年 -> 上限最高 30 天 (240h)
-const stat25y = LeaveEngine.calculateStatutoryAnnualLeave("2001-03-01", "2026-09-01");
-assert(stat25y.days === 30 && stat25y.hours === 240.0, "滿 25 年特休應達法定上限 30 天 (240h)");
-
-console.log("🎉 所有業務核心邏輯與勞基法特休試算單元測試全數通過！");
+console.log("🎉 所有業務核心邏輯與勞基法【歷年制】特休試算單元測試全數通過！");

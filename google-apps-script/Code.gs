@@ -408,8 +408,75 @@ function syncStatutoryAnnualLeaves(ss) {
 
   return {
     success: true,
-    message: `已依勞基法第38條同步 ${updatedCount} 位員工之特別休假額度 (ANNUAL)。`
+    message: `已依勞基法第38條施行細則第24條之1【歷年制】同步 ${updatedCount} 位員工之特別休假額度 (ANNUAL)。`
   };
+}
+
+/**
+ * 勞基法第38條施行細則第24條之1【歷年制】特休時數核算 (每年 1/1 ~ 12/31 重新核算)
+ */
+function calculateStatutoryAnnualLeaveHours(hireDate, targetYear) {
+  const year = targetYear || CONFIG.CURRENT_YEAR || 2026;
+  if (!hireDate) return 0.0;
+
+  let h = hireDate;
+  if (typeof h === "string") {
+    h = new Date(h.replace(/-/g, "/"));
+  }
+  if (!(h instanceof Date) || isNaN(h.getTime())) return 0.0;
+
+  const yearStart = new Date(year, 0, 1);
+  const yearEnd = new Date(year, 11, 31);
+  const totalYearDays = Math.round((yearEnd - yearStart) / (1000 * 60 * 60 * 24)) + 1; // 365 或 366
+
+  if (h > yearEnd) return 0.0;
+
+  function getAnniversaryDays(n) {
+    if (n < 0.5) return 0;
+    if (n >= 0.5 && n < 1) return 3;
+    if (n === 1) return 7;
+    if (n === 2) return 10;
+    if (n === 3 || n === 4) return 14;
+    if (n >= 5 && n < 10) return 15;
+    if (n >= 10) return Math.min(30, 15 + (n - 9));
+    return 0;
+  }
+
+  let statutoryDays = 0;
+
+  // 1. 若為當年度到職
+  if (h.getFullYear() === year) {
+    const sixMonthDate = new Date(h);
+    sixMonthDate.setMonth(sixMonthDate.getMonth() + 6);
+    if (sixMonthDate <= yearEnd) {
+      statutoryDays = 3.0;
+    } else {
+      statutoryDays = 0.0;
+    }
+  } else {
+    // 2. 前一年度或更早到職：以週年日切分前後段
+    const anniversary = new Date(year, h.getMonth(), h.getDate());
+    const priorYears = year - h.getFullYear() - 1;
+    const nextYears = priorYears + 1;
+
+    const d1 = Math.max(0, Math.floor((anniversary - yearStart) / (1000 * 60 * 60 * 24)));
+    const d2 = totalYearDays - d1;
+
+    let part1Days = 0;
+    if (priorYears === 0) {
+      const sixMonthDate = new Date(h);
+      sixMonthDate.setMonth(sixMonthDate.getMonth() + 6);
+      part1Days = (sixMonthDate <= yearStart) ? 3.0 : 0.0;
+    } else {
+      part1Days = getAnniversaryDays(priorYears) * (d1 / totalYearDays);
+    }
+
+    const part2Days = getAnniversaryDays(nextYears) * (d2 / totalYearDays);
+    const totalRaw = part1Days + part2Days;
+    statutoryDays = Math.round(totalRaw * 10) / 10;
+  }
+
+  return Math.round(statutoryDays * 8.0 * 10) / 10;
 }
 
 /**

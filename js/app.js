@@ -305,9 +305,9 @@ const App = {
     const user = this.state.currentUser;
     const year = SYSTEM_CONFIG.CURRENT_YEAR;
     
-    // 渲染勞基法特休標準提示條
+    // 渲染勞基法【歷年制】特休標準提示條 (每年 1/1 重新起算)
     const hireDate = user.hire_date ? LeaveEngine.formatDateOnly(user.hire_date) : "2024-03-01";
-    const stat = LeaveEngine.calculateStatutoryAnnualLeave(hireDate);
+    const stat = LeaveEngine.calculateStatutoryAnnualLeave(hireDate, year);
     const hireEl = document.getElementById("dashboardHireDate");
     const statDaysEl = document.getElementById("dashboardStatutoryDays");
     const badgeEl = document.getElementById("seniorityBadge");
@@ -316,7 +316,7 @@ const App = {
     if (hireEl) hireEl.textContent = hireDate;
     if (statDaysEl) statDaysEl.textContent = `${stat.days} 天 (${stat.hours}h)`;
     if (badgeEl) badgeEl.textContent = `年資：${stat.seniorityText || "計算中"}`;
-    if (descEl) descEl.textContent = `${stat.description} · 已自動更新至 leave_balances 表 ANNUAL 額度。`;
+    if (descEl) descEl.textContent = `【${year} 歷年制核算】${stat.description} · 年度未休畢特休將於結算時轉發薪資抵銷。`;
 
     // 假別額度卡片渲染
     const userBalances = this.state.balances.filter(b => b.user_id === user.id && b.year === year);
@@ -920,6 +920,7 @@ const App = {
         <tr>
           <th>歷程編號</th>
           <th>關聯單號</th>
+          <th>申請人</th>
           <th>類型</th>
           <th>審核人</th>
           <th>審核身分</th>
@@ -929,10 +930,47 @@ const App = {
         </tr>
       `;
 
-      if (this.state.logs.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; color: var(--text-muted); padding: 32px;">尚無簽核歷史歷程</td></tr>`;
+      // 依身分權限過濾歷程：一般員工只能看自己相關的，主管可看自己與下屬的，管理者可看全部
+      const visibleLogs = this.state.logs.filter(log => {
+        if (isAdmin) return true;
+
+        // 找出關聯申請人 ID
+        let applicantId = null;
+        if (log.request_type === "OVERTIME") {
+          const ot = this.state.overtimes.find(o => o.id === log.request_id);
+          if (ot) applicantId = ot.user_id;
+        } else {
+          const req = this.state.requests.find(r => r.id === log.request_id);
+          if (req) applicantId = req.user_id;
+        }
+
+        const isApplicantSelf = (applicantId === user.id);
+        const isApproverSelf = (log.approver_id === user.id);
+
+        if (isApplicantSelf || isApproverSelf) return true;
+
+        if (user.role === "Manager") {
+          const applicant = this.state.users.find(u => u.id === applicantId);
+          if (applicant && applicant.manager_id === user.id) return true;
+        }
+
+        return false;
+      });
+
+      if (visibleLogs.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="9" style="text-align: center; color: var(--text-muted); padding: 32px;">目前無符合權限之簽核歷史歷程</td></tr>`;
       } else {
-        this.state.logs.forEach(log => {
+        visibleLogs.forEach(log => {
+          let applicant = null;
+          if (log.request_type === "OVERTIME") {
+            const ot = this.state.overtimes.find(o => o.id === log.request_id);
+            if (ot) applicant = this.state.users.find(u => u.id === ot.user_id);
+          } else {
+            const req = this.state.requests.find(r => r.id === log.request_id);
+            if (req) applicant = this.state.users.find(u => u.id === req.user_id);
+          }
+          const applicantName = applicant ? `${applicant.name} (${applicant.department_name})` : '--';
+
           const approver = this.state.users.find(u => u.id === log.approver_id) || { name: log.approver_id };
           const statusBadge = log.status === "APPROVED" 
             ? `<span class="badge badge-approved">核准 APPROVED</span>` 
@@ -942,6 +980,7 @@ const App = {
           tr.innerHTML = `
             <td><span style="font-size: 0.78rem; color: var(--text-sub);">${log.id}</span></td>
             <td><strong>${log.request_id}</strong></td>
+            <td><strong>${applicantName}</strong></td>
             <td><span class="badge badge-blue">${log.request_type}</span></td>
             <td><strong>${approver.name}</strong></td>
             <td><span style="font-size: 0.8rem; color: var(--text-muted);">${log.approver_role}</span></td>
@@ -1262,10 +1301,17 @@ const App = {
 
     this.state.users.forEach(u => {
       const hireDate = u.hire_date ? LeaveEngine.formatDateOnly(u.hire_date) : "2024-03-01";
-      const stat = LeaveEngine.calculateStatutoryAnnualLeave(hireDate);
+      const stat = LeaveEngine.calculateStatutoryAnnualLeave(hireDate, year);
       const bal = this.state.balances.find(b => b.user_id === u.id && b.leave_type_id === "ANNUAL" && String(b.year) === String(year));
       const currentBalHours = bal ? bal.total_hours : 0;
+      const usedHours = bal ? bal.used_hours : 0;
+      const pendingHours = bal ? bal.pending_hours : 0;
+      const unusedHours = Math.max(0, currentBalHours - usedHours - pendingHours);
       const isSynced = (currentBalHours === stat.hours);
+
+      const encashmentHtml = unusedHours > 0 
+        ? `<span class="badge badge-purple" style="font-size: 0.78rem;" title="勞基法第38條第4項：每年度終結未休天數，雇主應發給工資"><i class="fa-solid fa-coins"></i> 結算抵銷 ${unusedHours}h (${(unusedHours/8).toFixed(1)}天)</span>` 
+        : `<span style="color: var(--text-muted); font-size: 0.78rem;"><i class="fa-solid fa-check"></i> 全數休畢</span>`;
 
       const isSelf = (u.id === user.id);
       const actionHtml = isSelf
@@ -1284,12 +1330,12 @@ const App = {
         </td>
         <td><span class="badge" style="background: #f1f5f9; color: var(--text-main); font-weight: 600;">${stat.seniorityText || "未滿半年"}</span></td>
         <td><strong style="color: #15803d; font-size: 0.95rem;">${stat.days}</strong> 天</td>
-        <td><strong style="color: var(--primary); font-family: 'JetBrains Mono';">${stat.hours}</strong> 小時</td>
         <td>
           <span class="badge ${isSynced ? 'badge-approved' : 'badge-pending'}" title="${isSynced ? '已完成法定特休同步' : '待同步'}">
-            <i class="fa-solid ${isSynced ? 'fa-check' : 'fa-triangle-exclamation'}"></i> ${currentBalHours}h
+            <i class="fa-solid ${isSynced ? 'fa-check' : 'fa-triangle-exclamation'}"></i> ${stat.hours}h
           </span>
         </td>
+        <td>${encashmentHtml}</td>
         <td>${actionHtml}</td>
       `;
       tbody.appendChild(tr);
@@ -1354,12 +1400,12 @@ const App = {
     const hireDate = document.getElementById("newUserHireDate").value;
     const previewEl = document.getElementById("newUserAnnualPreview");
     if (!hireDate) {
-      if (previewEl) previewEl.textContent = "請選擇到職日，系統將依勞基法第38條自動核算特休額度...";
+      if (previewEl) previewEl.textContent = "請選擇到職日，系統將依勞基法第38條施行細則第24條之1【歷年制】自動核算特休額度...";
       return;
     }
-    const stat = LeaveEngine.calculateStatutoryAnnualLeave(hireDate);
+    const stat = LeaveEngine.calculateStatutoryAnnualLeave(hireDate, SYSTEM_CONFIG.CURRENT_YEAR);
     if (previewEl) {
-      previewEl.innerHTML = `<strong>勞基法核算法定特休：</strong>年資 ${stat.seniorityText || "0"}，核發 <strong style="color: #15803d;">${stat.days} 天 (${stat.hours} 小時)</strong> 特別休假，將自動建立 ANNUAL 額度。`;
+      previewEl.innerHTML = `<strong>勞基法【歷年制】核算法定特休：</strong>年資 ${stat.seniorityText || "0"}，${stat.tierDesc}，核發 <strong style="color: #15803d;">${stat.days} 天 (${stat.hours} 小時)</strong> 特別休假，將自動建立 ANNUAL 額度。`;
     }
   },
 
