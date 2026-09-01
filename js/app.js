@@ -743,12 +743,16 @@ const App = {
     // 請假單待審
     const pendingLeaves = this.state.requests.filter(r => {
       if (r.status !== "PENDING") return false;
-      if (r.user_id === user.id) return false; // 自己不可審核自己的單
+      const applicant = this.state.users.find(u => u.id === r.user_id);
+      const isSelf = (r.user_id === user.id);
+      const isSelfManager = (applicant && (applicant.manager_id === user.id || !applicant.manager_id));
+
+      // 若為一般同仁本人 (主管另有其人且非 Admin)，則不可自審
+      if (isSelf && !isSelfManager && !isAdmin) return false;
 
       if (r.current_step === "MANAGER") {
-        // 直屬主管審核：需為申請人的 manager_id，或是 Admin
-        const applicant = this.state.users.find(u => u.id === r.user_id);
-        return (applicant && applicant.manager_id === user.id) || isAdmin;
+        // 直屬主管審核：需為申請人的 manager_id，或是 Admin，或是主管本人自核
+        return (applicant && (applicant.manager_id === user.id || (isSelf && isSelfManager))) || isAdmin;
       } else if (r.current_step === "HR") {
         // 第二階 HR 雙簽：需為 Admin / HR 角色
         return isAdmin;
@@ -759,17 +763,23 @@ const App = {
     // 銷假單待審
     const pendingCancels = this.state.requests.filter(r => {
       if (r.status !== "CANCEL_PENDING") return false;
-      if (r.user_id === user.id) return false;
       const applicant = this.state.users.find(u => u.id === r.user_id);
-      return (applicant && applicant.manager_id === user.id) || isAdmin;
+      const isSelf = (r.user_id === user.id);
+      const isSelfManager = (applicant && (applicant.manager_id === user.id || !applicant.manager_id));
+
+      if (isSelf && !isSelfManager && !isAdmin) return false;
+      return (applicant && (applicant.manager_id === user.id || (isSelf && isSelfManager))) || isAdmin;
     });
 
     // 加班單待審
     const pendingOvertimes = this.state.overtimes.filter(o => {
       if (o.status !== "PENDING") return false;
-      if (o.user_id === user.id) return false;
       const applicant = this.state.users.find(u => u.id === o.user_id);
-      return (applicant && applicant.manager_id === user.id) || isAdmin;
+      const isSelf = (o.user_id === user.id);
+      const isSelfManager = (applicant && (applicant.manager_id === user.id || !applicant.manager_id));
+
+      if (isSelf && !isSelfManager && !isAdmin) return false;
+      return (applicant && (applicant.manager_id === user.id || (isSelf && isSelfManager))) || isAdmin;
     });
 
     // 更新各 Tab 數量徽章
@@ -1556,22 +1566,27 @@ const App = {
 
     let count = 0;
     this.state.requests.forEach(r => {
-      if (r.user_id === user.id) return;
+      const applicant = this.state.users.find(u => u.id === r.user_id);
+      const isSelf = (r.user_id === user.id);
+      const isSelfManager = (applicant && (applicant.manager_id === user.id || !applicant.manager_id));
+      if (isSelf && !isSelfManager && !isAdmin) return;
+
       if (r.status === "PENDING") {
-        const applicant = this.state.users.find(u => u.id === r.user_id);
-        if (r.current_step === "MANAGER" && ((applicant && applicant.manager_id === user.id) || isAdmin)) count++;
+        if (r.current_step === "MANAGER" && ((applicant && (applicant.manager_id === user.id || (isSelf && isSelfManager))) || isAdmin)) count++;
         if (r.current_step === "HR" && isAdmin) count++;
       } else if (r.status === "CANCEL_PENDING") {
-        const applicant = this.state.users.find(u => u.id === r.user_id);
-        if ((applicant && applicant.manager_id === user.id) || isAdmin) count++;
+        if ((applicant && (applicant.manager_id === user.id || (isSelf && isSelfManager))) || isAdmin) count++;
       }
     });
 
     this.state.overtimes.forEach(o => {
-      if (o.user_id === user.id) return;
+      const applicant = this.state.users.find(u => u.id === o.user_id);
+      const isSelf = (o.user_id === user.id);
+      const isSelfManager = (applicant && (applicant.manager_id === user.id || !applicant.manager_id));
+      if (isSelf && !isSelfManager && !isAdmin) return;
+
       if (o.status === "PENDING") {
-        const applicant = this.state.users.find(u => u.id === o.user_id);
-        if ((applicant && applicant.manager_id === user.id) || isAdmin) count++;
+        if ((applicant && (applicant.manager_id === user.id || (isSelf && isSelfManager))) || isAdmin) count++;
       }
     });
 
@@ -1591,22 +1606,27 @@ const App = {
 
     let count = 0;
     this.state.requests.forEach(r => {
-      if (r.user_id === user.id) return;
+      const applicant = this.state.users.find(u => u.id === r.user_id);
+      const isSelf = (r.user_id === user.id);
+      const isSelfManager = (applicant && (applicant.manager_id === user.id || !applicant.manager_id));
+      if (isSelf && !isSelfManager && !isAdmin) return;
+
       if (r.status === "PENDING") {
-        const applicant = this.state.users.find(u => u.id === r.user_id);
-        if (r.current_step === "MANAGER" && ((applicant && applicant.manager_id === user.id) || isAdmin)) count++;
+        if (r.current_step === "MANAGER" && ((applicant && (applicant.manager_id === user.id || (isSelf && isSelfManager))) || isAdmin)) count++;
         if (r.current_step === "HR" && isAdmin) count++;
       } else if (r.status === "CANCEL_PENDING") {
-        const applicant = this.state.users.find(u => u.id === r.user_id);
-        if ((applicant && applicant.manager_id === user.id) || isAdmin) count++;
+        if ((applicant && (applicant.manager_id === user.id || (isSelf && isSelfManager))) || isAdmin) count++;
       }
     });
 
     this.state.overtimes.forEach(o => {
-      if (o.user_id === user.id) return;
+      const applicant = this.state.users.find(u => u.id === o.user_id);
+      const isSelf = (o.user_id === user.id);
+      const isSelfManager = (applicant && (applicant.manager_id === user.id || !applicant.manager_id));
+      if (isSelf && !isSelfManager && !isAdmin) return;
+
       if (o.status === "PENDING") {
-        const applicant = this.state.users.find(u => u.id === o.user_id);
-        if ((applicant && applicant.manager_id === user.id) || isAdmin) count++;
+        if ((applicant && (applicant.manager_id === user.id || (isSelf && isSelfManager))) || isAdmin) count++;
       }
     });
 
