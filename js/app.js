@@ -20,6 +20,29 @@ const App = {
   },
 
   /**
+   * 顯示全域讀取載入畫面 (轉圈圈)
+   */
+  showLoading(mainText = "系統資料讀取中...", subText = "正在同步差勤資料庫，請稍候") {
+    const loadingScreen = document.getElementById("globalLoadingScreen");
+    if (!loadingScreen) return;
+    const mainEl = document.getElementById("loadingMainText");
+    const subEl = document.getElementById("loadingSubText");
+    if (mainEl) mainEl.textContent = mainText;
+    if (subEl) subEl.textContent = subText;
+    loadingScreen.classList.remove("hidden");
+  },
+
+  /**
+   * 隱藏全域讀取載入畫面
+   */
+  hideLoading() {
+    const loadingScreen = document.getElementById("globalLoadingScreen");
+    if (loadingScreen) {
+      loadingScreen.classList.add("hidden");
+    }
+  },
+
+  /**
    * 初始化系統
    */
   async init() {
@@ -28,7 +51,7 @@ const App = {
   },
 
   /**
-   * 檢查登入狀態
+   * 檢查登入狀態並於背景完成資料庫同步
    */
   async checkAuth() {
     const isLoggedIn = localStorage.getItem(SYSTEM_CONFIG.STORAGE_KEYS.SESSION_LOGGED_IN) === "true";
@@ -36,10 +59,21 @@ const App = {
 
     if (isLoggedIn) {
       if (loginOverlay) loginOverlay.classList.add("hidden");
-      await this.loadData();
-      this.renderHeader();
-      this.navigate(this.state.currentView);
+      this.showLoading("系統身分驗證中...", "正在載入個人差勤額度與差勤紀錄資料庫...");
+      try {
+        await this.loadData();
+        this.renderHeader();
+        this.navigate(this.state.currentView);
+      } catch (err) {
+        console.error("載入資料失敗:", err);
+        this.showToast("資料讀取異常，請重新整理或重新登入。", "error");
+      } finally {
+        setTimeout(() => {
+          this.hideLoading();
+        }, 150);
+      }
     } else {
+      this.hideLoading();
       if (loginOverlay) loginOverlay.classList.remove("hidden");
     }
   },
@@ -70,9 +104,11 @@ const App = {
         const loginOverlay = document.getElementById("loginScreen");
         if (loginOverlay) loginOverlay.classList.add("hidden");
 
+        this.showLoading(`歡迎回來，${res.user.name}`, "正在同步個人最新差勤額度與紀錄...");
         await this.loadData(res.user.id);
         this.renderHeader();
         this.navigate("dashboard");
+        this.hideLoading();
         this.showToast(`歡迎回來，${res.user.name} (${res.user.department_name} ${res.user.role})！`, "success");
       } else {
         if (errorBanner) {
@@ -123,6 +159,19 @@ const App = {
    */
   handleLogout() {
     localStorage.removeItem(SYSTEM_CONFIG.STORAGE_KEYS.SESSION_LOGGED_IN);
+    localStorage.removeItem(SYSTEM_CONFIG.STORAGE_KEYS.ACTIVE_USER_ID);
+    this.state.currentUser = null;
+
+    // 清除 Header 與畫面上的個人資訊
+    const userAvatar = document.getElementById("userAvatar");
+    const userName = document.getElementById("userName");
+    const userRoleTag = document.getElementById("userRoleTag");
+    const heroUserName = document.getElementById("heroUserName");
+    if (userAvatar) userAvatar.textContent = "--";
+    if (userName) userName.textContent = "請登入";
+    if (userRoleTag) userRoleTag.textContent = "--";
+    if (heroUserName) heroUserName.textContent = "--";
+
     const loginOverlay = document.getElementById("loginScreen");
     if (loginOverlay) {
       loginOverlay.classList.remove("hidden");

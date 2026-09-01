@@ -17,8 +17,22 @@
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
+  <!-- ==================== 全域資料讀取與身分驗證載入畫面 (Global Loading Screen) ==================== -->
+  <div class="global-loading-overlay" id="globalLoadingScreen">
+    <div class="loading-content">
+      <div class="loading-spinner-ring">
+        <div class="spinner-core"></div>
+        <i class="fa-solid fa-calendar-check spinner-icon"></i>
+      </div>
+      <div class="loading-text-wrap">
+        <h4 id="loadingMainText">系統資料讀取中...</h4>
+        <p id="loadingSubText">正在驗證身分並同步差勤資料庫，請稍候</p>
+      </div>
+    </div>
+  </div>
+
   <!-- ==================== 登入畫面 (Auth & Login Overlay) ==================== -->
-  <div class="login-overlay" id="loginScreen">
+  <div class="login-overlay hidden" id="loginScreen">
     <div class="login-card">
       <div class="login-header">
         <div class="login-logo">
@@ -122,7 +136,7 @@
         <div class="gas-status-box">
           <div>
             <span class="status-dot" id="sheetStatusDot"></span>
-            <span id="sheetStatusText" style="font-weight: 600;">本機資料庫模式</span>
+            <span id="sheetStatusText" style="font-weight: 600;">資料庫連線中...</span>
           </div>
           <button class="btn btn-sm btn-secondary" id="sidebarSettingsBtn" onclick="App.navigate('settings')" title="設定 Google Sheet 串接">
             <i class="fa-solid fa-gear"></i>
@@ -149,10 +163,10 @@
         <div class="header-right">
           <!-- 使用者資料徽章與修改密碼 / 登出按鈕 -->
           <div class="user-profile-badge">
-            <div class="user-avatar" id="userAvatar">王</div>
+            <div class="user-avatar" id="userAvatar">--</div>
             <div class="user-meta">
-              <span class="user-name" id="userName">王小明</span>
-              <span class="user-role-tag" id="userRoleTag">研發部 · Employee</span>
+              <span class="user-name" id="userName">載入中...</span>
+              <span class="user-role-tag" id="userRoleTag">驗證中...</span>
             </div>
           </div>
 
@@ -175,7 +189,7 @@
         <section class="view-section active" id="view-dashboard">
           <div class="dashboard-hero">
             <div class="hero-welcome">
-              <h3>早安，<span id="heroUserName">王小明</span> 👋</h3>
+              <h3>早安，<span id="heroUserName">--</span> 👋</h3>
               <p>今日為工作日，目前年度額度狀態與近期差勤紀錄如下：</p>
             </div>
             <div class="quick-action-group">
@@ -221,18 +235,20 @@
             <div style="display: flex; align-items: center; gap: 12px; font-size: 0.85rem;">
               <div style="background: white; border: 1px solid #dbeafe; border-radius: var(--radius-sm); padding: 6px 12px; box-shadow: 0 1px 2px rgba(0,0,0,0.03);">
                 <span style="color: var(--text-muted);"><i class="fa-solid fa-calendar-day"></i> 到職日：</span>
-                <strong style="color: var(--text-main);" id="dashboardHireDate">2024-03-01</strong>
+                <strong style="color: var(--text-main);" id="dashboardHireDate">--</strong>
               </div>
               <div style="background: white; border: 1px solid #bbf7d0; border-radius: var(--radius-sm); padding: 6px 12px; box-shadow: 0 1px 2px rgba(0,0,0,0.03);">
                 <span style="color: var(--text-muted);"><i class="fa-solid fa-gift"></i> 法定特休：</span>
-                <strong style="color: #15803d;" id="dashboardStatutoryDays">10 天 (80h)</strong>
+                <strong style="color: #15803d;" id="dashboardStatutoryDays">--</strong>
               </div>
             </div>
           </div>
 
           <!-- 額度卡片網格 (Balance Cards Grid) -->
           <div class="balance-grid" id="balanceCardsGrid">
-            <!-- 動態注入各假別額度卡片 -->
+            <div style="grid-column: 1/-1; text-align: center; padding: 36px; color: var(--text-muted);">
+              <i class="fa-solid fa-spinner fa-spin" style="margin-right: 8px;"></i> 假別額度讀取中...
+            </div>
           </div>
 
           <!-- 儀表板下半部 -->
