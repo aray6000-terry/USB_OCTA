@@ -665,7 +665,7 @@ const App = {
         tr.innerHTML = `
           <td><strong>${ot.id}</strong></td>
           <td>${ot.date}</td>
-          <td>${ot.start_time} ~ ${ot.end_time}</td>
+          <td>${LeaveEngine.formatTimeOnly(ot.start_time)} ~ ${LeaveEngine.formatTimeOnly(ot.end_time)}</td>
           <td><strong>${ot.hours}</strong> h</td>
           <td><strong style="color: var(--success); font-family: 'JetBrains Mono';">+${ot.comp_hours}</strong> h (${ot.comp_rate}x)</td>
           <td>${ot.reason}</td>
@@ -902,7 +902,7 @@ const App = {
             <td><strong>${ot.id}</strong></td>
             <td><strong>${applicant.name}</strong> (${applicant.department_name})</td>
             <td>${ot.date}</td>
-            <td>${ot.start_time} ~ ${ot.end_time}</td>
+            <td>${LeaveEngine.formatTimeOnly(ot.start_time)} ~ ${LeaveEngine.formatTimeOnly(ot.end_time)}</td>
             <td><strong>${ot.hours}</strong> h</td>
             <td><strong style="color: var(--success); font-family: 'JetBrains Mono';">+${ot.comp_hours}</strong> h</td>
             <td>${ot.reason}</td>
@@ -1017,7 +1017,7 @@ const App = {
           <div style="padding: 12px; background: #f8fafc; border-radius: var(--radius-md); display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
             <div>申報人員：<strong>${applicant.name}</strong> (${applicant.department_name})</div>
             <div>加班日期：<strong>${ot.date}</strong></div>
-            <div>加班時段：${ot.start_time} ~ ${ot.end_time}</div>
+            <div>加班時段：<strong>${LeaveEngine.formatTimeOnly(ot.start_time)} ~ ${LeaveEngine.formatTimeOnly(ot.end_time)}</strong></div>
             <div>申報工時：<strong>${ot.hours} 小時</strong></div>
             <div>換算倍率：<strong>${ot.comp_rate}x</strong></div>
             <div>發放補休：<strong style="color: var(--success); font-family: 'JetBrains Mono';">+${ot.comp_hours} 小時</strong></div>

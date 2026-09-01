@@ -260,5 +260,21 @@ const LeaveEngine = {
     const hours = ("0" + d.getHours()).slice(-2);
     const minutes = ("0" + d.getMinutes()).slice(-2);
     return `${year}-${month}-${day} ${hours}:${minutes}`;
+  },
+
+  /**
+   * 格式化時段 HH:mm (自動去除日期前綴)
+   */
+  formatTimeOnly(timeStr) {
+    if (!timeStr) return "";
+    let s = String(timeStr).trim();
+    if (s.includes("T")) {
+      s = s.split("T")[1];
+    } else if (s.includes(" ")) {
+      const parts = s.split(" ");
+      s = parts[parts.length - 1];
+    }
+    const match = s.match(/(\d{1,2}:\d{2})/);
+    return match ? match[1] : s;
   }
 };
