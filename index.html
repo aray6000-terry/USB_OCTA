@@ -847,12 +847,6 @@
         <section class="view-section" id="view-settings">
           <div style="display: flex; flex-direction: column; gap: 24px; max-width: 960px; margin: 0 auto;">
             
-            <!-- 非管理者權限提示 -->
-            <div id="settingsGasNonAdminNotice" style="display: none; padding: 16px 20px; background: #fffbeb; border: 1px solid #fde68a; border-radius: var(--radius-md); color: #92400e; font-size: 0.9rem;">
-              <i class="fa-solid fa-lock" style="margin-right: 8px;"></i>
-              <strong>系統設定權限說明：</strong> Google Apps Script / Google Sheet 後端串接與進階參數設定僅限<strong>管理者 (Admin)</strong> 進行配置。
-            </div>
-
             <!-- 全員到職日與勞基法歷年制特休管理面板 (置頂主要維護區) -->
             <div class="form-card" style="max-width: 100%;">
               <div class="panel-header">
@@ -897,14 +891,14 @@
               </div>
             </div>
 
-            <!-- Google Sheet 整合設定卡片 (移至系統設定最下方，限管理者) -->
+            <!-- Google Sheet 整合設定卡片 (移至系統設定最下方，限管理者，HR 模式下隱藏) -->
             <div class="form-card" id="settingsGasCard" style="max-width: 100%;">
               <div class="panel-header">
                 <div class="panel-title">
                   <i class="fa-brands fa-google-drive" style="color: #0f9d58;"></i>
                   Google Sheet / Google Apps Script 後端串接設定
                 </div>
-                <span class="badge badge-blue">限管理者權限</span>
+                <span class="badge badge-blue">限最高管理者 (Admin) 權限</span>
               </div>
 
               <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 16px;">
@@ -939,6 +933,12 @@
                   <li>點選右上角 <strong>佈署 (Deploy) &gt; 新增佈署作業 (New deployment)</strong>，類型選「網路應用程式 (Web app)」，「誰可以存取」設為<strong>所有人 (Anyone)</strong>，點擊佈署後將產生的 Web App URL 貼至上方欄位即可！</li>
                 </ol>
               </div>
+            </div>
+
+            <!-- 非系統管理者權限提示 (HR 權限模式下顯示於底部說明後端串接功能已隱藏) -->
+            <div id="settingsGasNonAdminNotice" style="display: none; padding: 16px 20px; background: #f8fafc; border: 1px solid var(--border-color); border-radius: var(--radius-md); color: var(--text-muted); font-size: 0.88rem;">
+              <i class="fa-solid fa-shield-halved" style="margin-right: 8px; color: var(--primary);"></i>
+              <strong>權限安全說明：</strong> Google Sheet / Google Apps Script 後端串接與資料庫連線設定僅限<strong>最高管理者 (Admin)</strong> 進行配置，人資 (HR) 模式已自動隱藏此功能。
             </div>
 
           </div>

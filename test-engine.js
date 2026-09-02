@@ -93,4 +93,11 @@ assert(LeaveEngine.isUserManager({ id: "EMP002", role: "Manager", department_nam
 assert(LeaveEngine.isUserManager({ id: "EMP003", role: "HR", department_name: "人資部" }) === false, "HR 人員不應被判定為 Manager 權限");
 assert(LeaveEngine.isUserManager({ id: "EMP012", role: "Employee", department_name: "管理部" }) === false, "管理部一般同仁 EMP012 不應被判定為 Manager 權限");
 
+// 測試 15: 後端串接設定 (isSystemAdmin) 權限劃分 - HR 角色不應具備系統後端串接權限
+assert(LeaveEngine.isSystemAdmin({ id: "EMP001", role: "Admin", department_name: "管理部" }) === true, "EMP001 Admin 應具備系統管理者權限");
+assert(LeaveEngine.isSystemAdmin({ id: "EMP004", role: "管理者", department_name: "業務部" }) === true, "中文『管理者』應具備系統管理者權限");
+assert(LeaveEngine.isSystemAdmin({ id: "EMP003", role: "HR", department_name: "人資部" }) === false, "HR 角色不應具備系統後端串接權限 (應隱藏)");
+assert(LeaveEngine.isSystemAdmin({ id: "EMP010", role: "人資", department_name: "人資部" }) === false, "人資角色不應具備系統後端串接權限 (應隱藏)");
+assert(LeaveEngine.isSystemAdmin({ id: "EMP005", role: "Employee", department_name: "研發部" }) === false, "一般員工不應具備系統管理者權限");
+
 console.log("🎉 所有業務核心邏輯、勞基法【歷年制】特休與角色權限劃分單元測試全數通過！");

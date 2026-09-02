@@ -1819,22 +1819,43 @@ const App = {
   },
 
   /**
-   * 7. 系統設定 (Settings) - 僅管理者權限可存取
+   * 7. 系統設定 (Settings) - 管理者與人資可存取，但後端串接功能僅限系統管理者
    */
   renderSettings() {
     const user = this.state.currentUser;
-    const isAdmin = user && (user.role === "Admin" || user.role === "HR");
+    const isHrOrAdmin = LeaveEngine.isUserAdmin(user);
 
-    if (!isAdmin) {
-      this.showToast("權限不足：系統設定專區僅限管理者 (Admin) 存取！", "error");
+    if (!isHrOrAdmin) {
+      this.showToast("權限不足：系統設定專區僅限人事與管理者 (Admin) 存取！", "error");
       this.navigate("dashboard");
       return;
     }
 
+    const isSysAdmin = LeaveEngine.isSystemAdmin(user);
     const gasCard = document.getElementById("settingsGasCard");
+    const nonAdminNotice = document.getElementById("settingsGasNonAdminNotice");
+
+    // HR 權限：後端串接設定功能隱藏；最高管理者 (Admin)：正常顯示
     if (gasCard) {
-      gasCard.style.display = "block";
-      document.getElementById("settingsGasUrl").value = ApiService.getGasUrl();
+      if (isSysAdmin) {
+        gasCard.style.display = "block";
+        document.getElementById("settingsGasUrl").value = ApiService.getGasUrl();
+      } else {
+        gasCard.style.display = "none";
+      }
+    }
+
+    // 權限提示切換
+    if (nonAdminNotice) {
+      nonAdminNotice.style.display = isSysAdmin ? "none" : "block";
+    }
+
+    // 人資模式動態微調標題
+    if (!isSysAdmin) {
+      const pageTitle = document.getElementById("pageTitle");
+      const pageSubtitle = document.getElementById("pageSubtitle");
+      if (pageTitle) pageTitle.textContent = "人事與特休額度管理";
+      if (pageSubtitle) pageSubtitle.textContent = "全員到職日維護、勞基法歷年制特休額度核算與假日排程";
     }
 
     // 渲染全員到職日與特休列表
@@ -2040,6 +2061,11 @@ const App = {
   },
 
   async saveGasSettings() {
+    if (!LeaveEngine.isSystemAdmin(this.state.currentUser)) {
+      this.showToast("權限不足：Google Sheet 後端串接設定僅限最高管理者 (Admin) 配置！", "error");
+      return;
+    }
+
     const url = document.getElementById("settingsGasUrl").value.trim();
     if (!url) {
       this.showToast("請輸入 Google Apps Script 網址！", "error");
@@ -2063,6 +2089,11 @@ const App = {
   },
 
   async testGasConnection() {
+    if (!LeaveEngine.isSystemAdmin(this.state.currentUser)) {
+      this.showToast("權限不足：Google Sheet 後端串接設定僅限最高管理者 (Admin) 配置！", "error");
+      return;
+    }
+
     const url = document.getElementById("settingsGasUrl").value.trim();
     this.showToast("連線測試中...", "info");
     const testRes = await ApiService.testGasConnection(url);
@@ -2074,6 +2105,11 @@ const App = {
   },
 
   switchToMockMode() {
+    if (!LeaveEngine.isSystemAdmin(this.state.currentUser)) {
+      this.showToast("權限不足：Google Sheet 後端串接設定僅限最高管理者 (Admin) 配置！", "error");
+      return;
+    }
+
     ApiService.setUseRemoteGas(false);
     this.showToast("已切換為【本機展示資料庫模式】", "success");
     this.renderHeader();

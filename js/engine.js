@@ -332,9 +332,42 @@ const LeaveEngine = {
       role === "管理者" ||
       role === "管理員" ||
       role === "人資" ||
+      role === "人事" ||
       role === "超級管理員" ||
       role === "超級管理者"
     );
+  },
+
+  /**
+   * 判定使用者是否具備最高系統管理者權限 (可存取 Google Sheet / GAS 後端串接設定，排除純 HR 權限)
+   */
+  isSystemAdmin(user) {
+    if (!user) return false;
+    const id = (user.id || "").toString().trim().toUpperCase();
+    const role = (user.role || "").toString().trim().toLowerCase();
+
+    // 純 HR / 人資 / 人事身分不具備後端串接設定權限
+    if (role === "hr" || role === "人資" || role === "人事") {
+      return false;
+    }
+
+    return (
+      id === "EMP001" ||
+      role === "admin" ||
+      role === "管理者" ||
+      role === "管理員" ||
+      role === "超級管理員" ||
+      role === "超級管理者"
+    );
+  },
+
+  /**
+   * 判定使用者是否為 HR / 人資身分
+   */
+  isHR(user) {
+    if (!user) return false;
+    const role = (user.role || "").toString().trim().toLowerCase();
+    return role === "hr" || role === "人資" || role === "人事";
   },
 
   /**
