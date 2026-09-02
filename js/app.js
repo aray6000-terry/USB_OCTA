@@ -140,6 +140,17 @@ const App = {
   },
 
   /**
+   * 快速填入登入帳號密碼
+   */
+  quickFillLogin(email, password) {
+    const emailInput = document.getElementById("loginEmail");
+    const passInput = document.getElementById("loginPassword");
+    if (emailInput) emailInput.value = email;
+    if (passInput) passInput.value = password;
+    this.showToast(`已填入帳號 ${email}，點擊「登入系統」即可登入！`, "info");
+  },
+
+  /**
    * 切換密碼明文/隱藏
    */
   togglePasswordVisibility(inputId, btnElem) {

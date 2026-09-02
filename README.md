@@ -78,3 +78,21 @@ d:\#1_GOOGLE_Antigravity\請假系統/
 4. 在上方執行函式選擇 `initDatabase` 並點擊「執行」，即可**自動建立所有 Sheet 工作表與種子資料**。
 5. 點擊右上角 **佈署 > 新增佈署作業**，類型選擇 **網路應用程式 (Web app)**，誰可以存取設為 **所有人 (Anyone)**。
 6. 將產生的 Web App URL 複製，在系統的「系統設定」頁面貼上並儲存即可完成雲端串接！
+
+### 3. 線上資料庫帳號與權限一覽 (預設密碼皆為 123456)
+
+| 員工編號 | 姓名 | 電子信箱 (Email) | 部門 | 系統角色 | 權限說明 |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **EMP001** | 李泰叡 | `aray6000@hotmail.com` | 管理部 | **Admin** | 系統最高管理者 (可管理資料庫與人事差勤) |
+| **EMP004** | 劉彩雲 | `amyliupp@gmail.com` | 人資部 | **HR** | 人資主管 (負責人事差勤、歷年制特休與二階簽核) |
+| **EMP002** | 陳勃毅 | `tony6070591135@gmail.com` | 研發部 | Employee | 研發部同仁 |
+| **EMP003** | 何貫宇 | `abc35789abc35789@gmail.com` | 業務部 | Employee | 業務部同仁 |
+| **EMP005** | 廖國寓 | `taisan648@gmail.com` | 研發部 | Employee | 研發部同仁 |
+| **EMP007** | 簡昕儀 | `kitty89092616@gmail.com` | 研發部 | Employee | 研發部同仁 |
+| **EMP008** | 江嘉偉 | `ccw891129@gmail.com` | 研發部 | Employee | 研發部同仁 |
+| **EMP009** | 徐堉桉 | `yy0937010806@gmail.com` | 研發部 | Employee | 研發部同仁 |
+| **EMP010** | 侯凱嚴 | `ken.work345@gmail.com` | 研發部 | Employee | 研發部同仁 |
+| **EMP011** | 傅秉和 | `keionmio028@gmail.com` | 研發部 | Employee | 研發部同仁 |
+
+> **提示**：登入畫面下方已提供快捷按鈕，可一鍵直接填入人資主管 (`amyliupp@gmail.com`)、最高管理者 (`aray6000@hotmail.com`) 與同仁帳號！
+

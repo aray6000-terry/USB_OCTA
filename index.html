@@ -79,6 +79,24 @@
         <button type="submit" class="btn btn-primary btn-login" id="btnLoginSubmit">
           <i class="fa-solid fa-right-to-bracket"></i> 登入系統
         </button>
+
+        <!-- 常用帳號快捷填入 (對齊 Google Sheet 線上資料庫) -->
+        <div style="margin-top: 18px; padding-top: 14px; border-top: 1px dashed var(--border-color, #e2e8f0);">
+          <div style="font-size: 0.78rem; font-weight: 600; color: var(--text-muted); margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
+            <i class="fa-solid fa-bolt" style="color: #f59e0b;"></i> 線上資料庫帳號快捷填入 (預設密碼: 123456)
+          </div>
+          <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+            <button type="button" class="btn btn-sm btn-secondary" style="font-size: 0.75rem; padding: 4px 8px;" onclick="App.quickFillLogin('amyliupp@gmail.com', '123456')">
+              <i class="fa-solid fa-user-tie"></i> 人資主管 (劉彩雲)
+            </button>
+            <button type="button" class="btn btn-sm btn-secondary" style="font-size: 0.75rem; padding: 4px 8px;" onclick="App.quickFillLogin('tony6070591135@gmail.com', '123456')">
+              <i class="fa-solid fa-user"></i> 研發同仁 (陳勃毅)
+            </button>
+            <button type="button" class="btn btn-sm btn-secondary" style="font-size: 0.75rem; padding: 4px 8px;" onclick="App.quickFillLogin('aray6000@hotmail.com', '123456')">
+              <i class="fa-solid fa-user-shield"></i> 最高管理者 (李泰叡)
+            </button>
+          </div>
+        </div>
       </form>
     </div>
   </div>
