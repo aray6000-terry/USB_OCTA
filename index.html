@@ -138,8 +138,8 @@
             <span class="status-dot" id="sheetStatusDot"></span>
             <span id="sheetStatusText" style="font-weight: 600;">資料庫連線中...</span>
           </div>
-          <button class="btn btn-sm btn-secondary" id="sidebarSettingsBtn" onclick="App.navigate('settings')" title="設定 Google Sheet 串接">
-            <i class="fa-solid fa-gear"></i>
+          <button class="btn btn-sm btn-secondary" id="sidebarSettingsBtn" onclick="App.navigate('settings')" title="系統與特休設定">
+            <i class="fa-solid fa-gear"></i> 設定
           </button>
         </div>
       </div>
@@ -892,7 +892,7 @@
             </div>
 
             <!-- Google Sheet 整合設定卡片 (移至系統設定最下方，限管理者，HR 模式下隱藏) -->
-            <div class="form-card" id="settingsGasCard" style="max-width: 100%;">
+            <div class="form-card" id="settingsGasCard" style="max-width: 100%; display: none;">
               <div class="panel-header">
                 <div class="panel-title">
                   <i class="fa-brands fa-google-drive" style="color: #0f9d58;"></i>

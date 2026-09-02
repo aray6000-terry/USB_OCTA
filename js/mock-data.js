@@ -32,13 +32,13 @@ const MockDataEngine = {
         },
         {
           id: "EMP003",
-          name: "林經理 (HR/Admin)",
-          email: "admin@company.com",
+          name: "林經理 (人資主管)",
+          email: "hr_admin@company.com",
           password_hash: "123456",
           department_id: "DEPT_HR",
           department_name: "人資部",
           manager_id: "",
-          role: "Admin",
+          role: "HR",
           hire_date: "2020-07-01",
           created_at: "2026-01-01 09:00:00"
         },

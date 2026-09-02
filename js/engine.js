@@ -128,11 +128,11 @@ const LeaveEngine = {
       role: "Manager"
     };
 
-    // 人資 / 管理員 (HR)
-    const hr = allUsers.find(u => u.role === "Admin" || u.department_id === "DEPT_HR") || {
+    // 人資 (HR)
+    const hr = allUsers.find(u => u.role === "HR" || u.department_id === "DEPT_HR" || u.role === "Admin") || {
       id: "EMP003",
-      name: "林經理 (HR/Admin)",
-      role: "Admin"
+      name: "林經理 (人資主管)",
+      role: "HR"
     };
 
     if (isMultiTier) {
