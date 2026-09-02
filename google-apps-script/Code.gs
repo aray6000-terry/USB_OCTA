@@ -167,16 +167,18 @@ function initDatabase(forceReset) {
   // 1. users 表 (新增 hire_date 到職日欄位，涵蓋 8 大部門)
   const userHeaders = ["id", "name", "email", "password_hash", "department_id", "department_name", "manager_id", "role", "hire_date", "created_at"];
   const userSeeds = [
-    ["EMP001", "李泰叡", "admin@company.com", "123456", "DEPT_MGMT", "管理部", "", "Admin", "2024-03-01", "2026-01-01 09:00:00"],
-    ["EMP002", "陳主管", "manager@company.com", "123456", "DEPT_RD", "研發部", "EMP001", "Manager", "2023-01-15", "2026-01-01 09:00:00"],
-    ["EMP003", "林經理 (人資主管)", "hr_admin@company.com", "123456", "DEPT_HR", "人資部", "", "HR", "2020-07-01", "2026-01-01 09:00:00"],
-    ["EMP004", "張業務", "sales@company.com", "123456", "DEPT_SALES", "業務部", "EMP002", "Employee", "2025-10-01", "2026-01-01 09:00:00"],
-    ["EMP005", "李設計", "design@company.com", "123456", "DEPT_DESIGN", "設計部", "EMP002", "Employee", "2024-08-01", "2026-01-01 09:00:00"],
-    ["EMP006", "周工程", "eng@company.com", "123456", "DEPT_ENG", "工程部", "EMP002", "Employee", "2024-05-01", "2026-01-01 09:00:00"],
-    ["EMP007", "錢財務", "fin@company.com", "123456", "DEPT_FIN", "財務部", "EMP003", "Employee", "2023-11-01", "2026-01-01 09:00:00"],
-    ["EMP008", "趙維修", "maint@company.com", "123456", "DEPT_MAINT", "維修部", "EMP002", "Employee", "2025-02-01", "2026-01-01 09:00:00"],
-    ["EMP009", "孫管理", "mgmt@company.com", "123456", "DEPT_MGMT", "管理部", "EMP003", "Manager", "2022-04-01", "2026-01-01 09:00:00"],
-    ["EMP010", "吳人資", "hr@company.com", "123456", "DEPT_HR", "人資部", "EMP003", "HR", "2023-06-01", "2026-01-01 09:00:00"]
+    ["EMP001", "李泰叡", "aray6000@hotmail.com", "123456", "DEPT_MGMT", "管理部", "EMP001", "Admin", "2018-04-16", "2026-01-01 09:00:00"],
+    ["EMP002", "陳勃毅", "tony6070591135@gmail.com", "123456", "DEPT_RD", "研發部", "EMP001", "Employee", "2023-08-07", "2026-01-01 09:00:00"],
+    ["EMP003", "何貫宇", "abc35789abc35789@gmail.com", "123456", "DEPT_SALES", "業務部", "EMP001", "Employee", "2024-02-26", "2026-01-01 09:00:00"],
+    ["EMP004", "劉彩雲", "amyliupp@gmail.com", "123456", "DEPT_HR", "人資部", "EMP001", "HR", "2024-03-18", "2026-01-01 09:00:00"],
+    ["EMP005", "廖國寓", "taisan648@gmail.com", "123456", "DEPT_RD", "研發部", "EMP001", "Employee", "2024-10-21", "2026-01-01 09:00:00"],
+    ["EMP006", "何瑋恩", "hew183273@gmail.com", "123456", "DEPT_RD", "研發部", "EMP001", "Employee", "2025-03-04", "2026-01-01 09:00:00"],
+    ["EMP007", "簡昕儀", "kitty89092616@gmail.com", "123456", "DEPT_RD", "研發部", "EMP001", "Employee", "2025-05-05", "2026-01-01 09:00:00"],
+    ["EMP008", "江嘉偉", "ccw891129@gmail.com", "123456", "DEPT_RD", "研發部", "EMP001", "Employee", "2025-07-23", "2026-01-01 09:00:00"],
+    ["EMP009", "徐堉桉", "yy0937010806@gmail.com", "123456", "DEPT_RD", "研發部", "EMP001", "Employee", "2025-08-01", "2026-01-01 09:00:00"],
+    ["EMP010", "侯凱嚴", "ken.work345@gmail.com", "123456", "DEPT_RD", "研發部", "EMP001", "Employee", "2026-01-12", "2026-01-01 09:00:00"],
+    ["EMP011", "傅秉和", "keionmio028@gmail.com", "123456", "DEPT_RD", "研發部", "EMP001", "Employee", "2026-01-12", "2026-01-01 09:00:00"],
+    ["EMP012", "蔡倢羚", "a0977001617@gmail.com", "123456", "DEPT_MGMT", "管理部", "EMP001", "Employee", "2026-03-16", "2026-01-01 09:00:00"]
   ];
   setupSheet(ss, sheets.USERS, userHeaders, userSeeds, isForce);
 
