@@ -126,9 +126,13 @@
           <span>審核簽核中心</span>
           <span class="nav-badge" id="pendingApprovalBadge" style="display: none;">0</span>
         </a>
-        <a class="nav-item" data-view="settings" id="navSettings">
-          <i class="fa-solid fa-sliders"></i>
-          <span>系統設定 / Sheet</span>
+        <a class="nav-item" data-view="hr-management" id="navHrManagement" style="display: none;">
+          <i class="fa-solid fa-users-gear"></i>
+          <span>人事差勤維護</span>
+        </a>
+        <a class="nav-item" data-view="system-settings" id="navSystemSettings" style="display: none;">
+          <i class="fa-solid fa-server"></i>
+          <span>資料庫串接設定</span>
         </a>
       </nav>
 
@@ -138,7 +142,7 @@
             <span class="status-dot" id="sheetStatusDot"></span>
             <span id="sheetStatusText" style="font-weight: 600;">資料庫連線中...</span>
           </div>
-          <button class="btn btn-sm btn-secondary" id="sidebarSettingsBtn" onclick="App.navigate('settings')" title="系統與特休設定">
+          <button class="btn btn-sm btn-secondary" id="sidebarSettingsBtn" onclick="App.navigate('system-settings')" title="資料庫串接設定" style="display: none;">
             <i class="fa-solid fa-gear"></i> 設定
           </button>
         </div>
@@ -843,11 +847,11 @@
           </div>
         </section>
 
-        <!-- ==================== 6. 系統設定與 Google Sheet 串接 ==================== -->
-        <section class="view-section" id="view-settings">
+        <!-- ==================== 6. 人事差勤與特休管理 (HR & Admin 可存取，零技術設定) ==================== -->
+        <section class="view-section" id="view-hr-management">
           <div style="display: flex; flex-direction: column; gap: 24px; max-width: 960px; margin: 0 auto;">
             
-            <!-- 全員到職日與勞基法歷年制特休管理面板 (置頂主要維護區) -->
+            <!-- 全員到職日與勞基法歷年制特休管理面板 (HR 主要維護區) -->
             <div class="form-card" style="max-width: 100%;">
               <div class="panel-header">
                 <div class="panel-title">
@@ -891,14 +895,26 @@
               </div>
             </div>
 
-            <!-- Google Sheet 整合設定卡片 (移至系統設定最下方，限管理者，HR 模式下隱藏) -->
-            <div class="form-card" id="settingsGasCard" style="max-width: 100%; display: none;">
+          </div>
+        </section>
+
+        <!-- ==================== 7. 資料庫後端串接設定 (嚴格限最高管理者 Admin) ==================== -->
+        <section class="view-section" id="view-system-settings">
+          <div style="display: flex; flex-direction: column; gap: 24px; max-width: 960px; margin: 0 auto;">
+            
+            <!-- Google Sheet 整合設定卡片 (僅限最高管理者 Admin) -->
+            <div class="form-card" id="settingsGasCard" style="max-width: 100%;">
               <div class="panel-header">
                 <div class="panel-title">
                   <i class="fa-brands fa-google-drive" style="color: #0f9d58;"></i>
-                  Google Sheet / Google Apps Script 後端串接設定
+                  Google Sheet / Google Apps Script 後端資料庫串接設定
                 </div>
-                <span class="badge badge-blue">限最高管理者 (Admin) 權限</span>
+                <span class="badge badge-purple"><i class="fa-solid fa-shield-halved"></i> 僅限最高管理者 (Admin)</span>
+              </div>
+
+              <div style="padding: 12px 16px; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: var(--radius-md); color: #1e40af; font-size: 0.88rem; margin-bottom: 16px;">
+                <i class="fa-solid fa-circle-info" style="margin-right: 6px;"></i>
+                <strong>安全控管：</strong> 本區塊為全系統資料庫核心連線位址，<strong>僅限最高管理者 (Admin) 進行配置</strong>。人資 (HR) 與一般主管/員工均無權存取與修改。
               </div>
 
               <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 16px;">
@@ -906,7 +922,10 @@
               </p>
 
               <div class="form-group" style="margin-bottom: 16px;">
-                <label class="form-label">Google Apps Script Web 應用程式網址 (Web App URL)</label>
+                <label class="form-label" style="display: flex; justify-content: space-between;">
+                  <span>Google Apps Script Web 應用程式網址 (Web App URL)</span>
+                  <span style="font-size: 0.8rem; color: var(--text-muted);">需為 <code>/exec</code> 結尾</span>
+                </label>
                 <input type="url" class="form-control" id="settingsGasUrl" placeholder="https://script.google.com/macros/s/AKfycb.../exec">
                 <span class="form-help-text">佈署時請將存取權限設為「所有人 (Anyone)」。</span>
               </div>
@@ -917,6 +936,9 @@
                 </button>
                 <button class="btn btn-secondary" onclick="App.testGasConnection()">
                   <i class="fa-solid fa-network-wired"></i> 測試連線
+                </button>
+                <button class="btn btn-secondary" onclick="App.restoreDefaultGasUrl()" style="border-color: #f59e0b; color: #b45309;">
+                  <i class="fa-solid fa-rotate-left"></i> 一鍵還原官方預設路徑
                 </button>
                 <button class="btn btn-secondary" onclick="App.switchToMockMode()">
                   <i class="fa-solid fa-database"></i> 切換回本機展示資料庫
@@ -933,12 +955,6 @@
                   <li>點選右上角 <strong>佈署 (Deploy) &gt; 新增佈署作業 (New deployment)</strong>，類型選「網路應用程式 (Web app)」，「誰可以存取」設為<strong>所有人 (Anyone)</strong>，點擊佈署後將產生的 Web App URL 貼至上方欄位即可！</li>
                 </ol>
               </div>
-            </div>
-
-            <!-- 非系統管理者權限提示 (HR 權限模式下顯示於底部說明後端串接功能已隱藏) -->
-            <div id="settingsGasNonAdminNotice" style="display: none; padding: 16px 20px; background: #f8fafc; border: 1px solid var(--border-color); border-radius: var(--radius-md); color: var(--text-muted); font-size: 0.88rem;">
-              <i class="fa-solid fa-shield-halved" style="margin-right: 8px; color: var(--primary);"></i>
-              <strong>權限安全說明：</strong> Google Sheet / Google Apps Script 後端串接與資料庫連線設定僅限<strong>最高管理者 (Admin)</strong> 進行配置，人資 (HR) 模式已自動隱藏此功能。
             </div>
 
           </div>

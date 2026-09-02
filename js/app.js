@@ -235,13 +235,28 @@ const App = {
   /**
    * 視圖切換
    */
+  /**
+   * 視圖切換 (嚴格角色職責分離：Admin 專屬後端設定、HR 專屬人事差勤)
+   */
   navigate(viewName) {
     const user = this.state.currentUser;
-    const isAdmin = LeaveEngine.isUserAdmin(user);
+    const isHrOrAdmin = LeaveEngine.isUserAdmin(user);
+    const isSysAdmin = LeaveEngine.isSystemAdmin(user);
 
-    // 嚴格權限防護：系統設定專區僅限系統管理者 (Admin) 存取
-    if (viewName === "settings" && !isAdmin) {
-      this.showToast("權限不足：系統設定專區僅限管理者 (Admin) 存取！", "error");
+    // 兼顧舊版 'settings' 請求轉發
+    if (viewName === "settings") {
+      viewName = isSysAdmin ? "system-settings" : "hr-management";
+    }
+
+    // 嚴格權限防護：資料庫後端串接設定僅限最高管理者 (Admin) 存取
+    if (viewName === "system-settings" && !isSysAdmin) {
+      this.showToast("權限不足：資料庫後端串接設定僅限最高管理者 (Admin) 配置！", "error");
+      viewName = "dashboard";
+    }
+
+    // 嚴格權限防護：人事差勤維護專區僅限 HR 與最高管理者 (Admin) 存取
+    if (viewName === "hr-management" && !isHrOrAdmin) {
+      this.showToast("權限不足：人事差勤維護專區僅限人事 (HR) 與管理者存取！", "error");
       viewName = "dashboard";
     }
 
@@ -273,7 +288,9 @@ const App = {
       "history": { title: "個人差勤歷史紀錄", sub: "依假別、時間區間自訂多條件查詢，並支援一鍵匯出 CSV / Excel 報表" },
       "approvals": { title: "審核簽核中心", sub: "支援主管與人資進行請假、銷假與加班換補休之審核" },
       "calendar": { title: "團隊差勤行事曆", sub: "檢視部門差勤分佈與 2026 國定假日排程" },
-      "settings": { title: "系統設定與 Google Sheet 串接", sub: "管理 Google Apps Script 雲端同步與本機資料庫" }
+      "hr-management": { title: "人事差勤與特休額度管理", sub: "全員到職日維護、勞基法歷年制特休額度核算與法定特休同步" },
+      "system-settings": { title: "系統後端與資料庫串接設定", sub: "管理 Google Apps Script Web App 雲端連線與資料庫路徑" },
+      "settings": { title: "系統後端與資料庫串接設定", sub: "管理 Google Apps Script 雲端同步與資料庫路徑" }
     };
 
     if (titles[viewName]) {
@@ -301,8 +318,15 @@ const App = {
       case "calendar":
         this.renderCalendar();
         break;
+      case "hr-management":
+        this.renderHrManagement();
+        break;
+      case "system-settings":
+        this.renderSystemSettings();
+        break;
       case "settings":
-        this.renderSettings();
+        if (isSysAdmin) this.renderSystemSettings();
+        else this.renderHrManagement();
         break;
     }
 
@@ -1819,43 +1843,16 @@ const App = {
   },
 
   /**
-   * 7. 系統設定 (Settings) - 管理者與人資可存取，但後端串接功能僅限系統管理者
+   * 7. 人事差勤與特休管理 (HR Management) - HR 與最高管理者可存取 (純人事，無任何資料庫設定)
    */
-  renderSettings() {
+  renderHrManagement() {
     const user = this.state.currentUser;
     const isHrOrAdmin = LeaveEngine.isUserAdmin(user);
 
     if (!isHrOrAdmin) {
-      this.showToast("權限不足：系統設定專區僅限人事與管理者 (Admin) 存取！", "error");
+      this.showToast("權限不足：人事差勤專區僅限人事 (HR) 與最高管理者存取！", "error");
       this.navigate("dashboard");
       return;
-    }
-
-    const isSysAdmin = LeaveEngine.isSystemAdmin(user);
-    const gasCard = document.getElementById("settingsGasCard");
-    const nonAdminNotice = document.getElementById("settingsGasNonAdminNotice");
-
-    // HR 權限：後端串接設定功能隱藏；最高管理者 (Admin)：正常顯示
-    if (gasCard) {
-      if (isSysAdmin) {
-        gasCard.style.display = "block";
-        document.getElementById("settingsGasUrl").value = ApiService.getGasUrl();
-      } else {
-        gasCard.style.display = "none";
-      }
-    }
-
-    // 權限提示切換
-    if (nonAdminNotice) {
-      nonAdminNotice.style.display = isSysAdmin ? "none" : "block";
-    }
-
-    // 人資模式動態微調標題
-    if (!isSysAdmin) {
-      const pageTitle = document.getElementById("pageTitle");
-      const pageSubtitle = document.getElementById("pageSubtitle");
-      if (pageTitle) pageTitle.textContent = "人事與特休額度管理";
-      if (pageSubtitle) pageSubtitle.textContent = "全員到職日維護、勞基法歷年制特休額度核算與假日排程";
     }
 
     // 渲染全員到職日與特休列表
@@ -1864,6 +1861,7 @@ const App = {
     tbody.innerHTML = "";
 
     const year = SYSTEM_CONFIG.CURRENT_YEAR || 2026;
+    const isAdmin = LeaveEngine.isUserAdmin(user);
 
     this.state.users.forEach(u => {
       const hireDate = u.hire_date ? LeaveEngine.formatDateOnly(u.hire_date) : "2024-03-01";
@@ -1906,6 +1904,59 @@ const App = {
       `;
       tbody.appendChild(tr);
     });
+  },
+
+  /**
+   * 8. 系統後端與資料庫串接設定 (System Settings) - 嚴格限制僅限最高管理者 Admin
+   */
+  renderSystemSettings() {
+    const user = this.state.currentUser;
+    const isSysAdmin = LeaveEngine.isSystemAdmin(user);
+
+    if (!isSysAdmin) {
+      this.showToast("權限不足：資料庫後端串接設定僅限最高管理者 (Admin) 配置！", "error");
+      this.navigate("dashboard");
+      return;
+    }
+
+    const gasInput = document.getElementById("settingsGasUrl");
+    if (gasInput) {
+      gasInput.value = ApiService.getGasUrl();
+    }
+  },
+
+  /**
+   * 相容舊版呼叫
+   */
+  renderSettings() {
+    if (LeaveEngine.isSystemAdmin(this.state.currentUser)) {
+      this.renderSystemSettings();
+    } else {
+      this.renderHrManagement();
+    }
+  },
+
+  /**
+   * 一鍵還原官方預設資料庫路徑 (修復被誤改的資料庫路徑)
+   */
+  async restoreDefaultGasUrl() {
+    if (!LeaveEngine.isSystemAdmin(this.state.currentUser)) {
+      this.showToast("權限不足：僅限最高管理者 (Admin) 可重設資料庫路徑！", "error");
+      return;
+    }
+    const defaultUrl = ApiService.resetToDefaultGasUrl();
+    const gasInput = document.getElementById("settingsGasUrl");
+    if (gasInput) gasInput.value = defaultUrl;
+    this.showToast("已成功重設為官方預設 Google Sheet 資料庫路徑！正在連線測試...", "info");
+    
+    const testRes = await ApiService.testGasConnection(defaultUrl);
+    if (testRes.success) {
+      this.showToast("Google Sheet 雲端連線測試成功！已還原預設資料庫！", "success");
+      await this.loadData();
+      this.renderHeader();
+    } else {
+      this.showToast(testRes.message, "error");
+    }
   },
 
   confirmDeleteUser(userId, userName) {
@@ -2290,14 +2341,22 @@ const App = {
       badge.style.display = "none";
     }
 
-    // 系統設定選單與快捷按鈕僅管理者 (Admin) 顯示
-    const navSettings = document.getElementById("navSettings");
-    if (navSettings) {
-      navSettings.style.display = isAdmin ? "flex" : "none";
+    // 人事差勤維護選單：HR 與最高管理者 (Admin) 顯示
+    const navHrManagement = document.getElementById("navHrManagement");
+    if (navHrManagement) {
+      navHrManagement.style.display = LeaveEngine.isUserAdmin(user) ? "flex" : "none";
     }
+
+    // 資料庫串接設定選單：嚴格僅最高管理者 (Admin) 顯示，HR 完全隱藏
+    const navSystemSettings = document.getElementById("navSystemSettings");
+    if (navSystemSettings) {
+      navSystemSettings.style.display = LeaveEngine.isSystemAdmin(user) ? "flex" : "none";
+    }
+
+    // 側欄底部設定按鈕：僅最高管理者 (Admin) 顯示，HR 完全隱藏
     const sidebarSettingsBtn = document.getElementById("sidebarSettingsBtn");
     if (sidebarSettingsBtn) {
-      sidebarSettingsBtn.style.display = isAdmin ? "inline-flex" : "none";
+      sidebarSettingsBtn.style.display = LeaveEngine.isSystemAdmin(user) ? "inline-flex" : "none";
     }
   },
 

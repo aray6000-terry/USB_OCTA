@@ -4,11 +4,21 @@
  */
 const ApiService = {
   getGasUrl() {
-    return localStorage.getItem(SYSTEM_CONFIG.STORAGE_KEYS.GAS_URL) || SYSTEM_CONFIG.DEFAULT_GAS_URL || "";
+    const stored = localStorage.getItem(SYSTEM_CONFIG.STORAGE_KEYS.GAS_URL);
+    if (stored && stored.trim()) return stored.trim();
+    return SYSTEM_CONFIG.DEFAULT_GAS_URL || "";
   },
 
   setGasUrl(url) {
+    // 嚴格權限防護：非最高管理者 (Admin) 角色一律直接攔截，防止 HR 誤改資料庫路徑
+    if (typeof App !== "undefined" && App.state && App.state.currentUser) {
+      if (!LeaveEngine.isSystemAdmin(App.state.currentUser)) {
+        console.error("【安全性拒絕】只有最高管理者 (Admin) 才能修改資料庫路徑！HR 無此權限。");
+        return false;
+      }
+    }
     localStorage.setItem(SYSTEM_CONFIG.STORAGE_KEYS.GAS_URL, (url || "").trim());
+    return true;
   },
 
   isUsingRemoteGas() {
@@ -19,7 +29,24 @@ const ApiService = {
   },
 
   setUseRemoteGas(useRemote) {
+    // 嚴格權限防護：非最高管理者 (Admin) 角色禁止切換資料庫模式
+    if (typeof App !== "undefined" && App.state && App.state.currentUser) {
+      if (!LeaveEngine.isSystemAdmin(App.state.currentUser)) {
+        console.error("【安全性拒絕】只有最高管理者 (Admin) 才能切換資料庫模式！HR 無此權限。");
+        return false;
+      }
+    }
     localStorage.setItem(SYSTEM_CONFIG.STORAGE_KEYS.USE_REMOTE_GAS, useRemote ? "true" : "false");
+    return true;
+  },
+
+  /**
+   * 一鍵還原官方預設 Google Sheet 資料庫連線路徑
+   */
+  resetToDefaultGasUrl() {
+    localStorage.setItem(SYSTEM_CONFIG.STORAGE_KEYS.GAS_URL, SYSTEM_CONFIG.DEFAULT_GAS_URL);
+    localStorage.setItem(SYSTEM_CONFIG.STORAGE_KEYS.USE_REMOTE_GAS, "true");
+    return SYSTEM_CONFIG.DEFAULT_GAS_URL;
   },
 
   /**
