@@ -66,7 +66,7 @@ function handleRequest(e) {
         break;
 
       case "initDatabase":
-        result = initDatabase();
+        result = initDatabase(params.forceReset);
         break;
 
       case "getBootstrapData":
@@ -159,9 +159,10 @@ function handleRequest(e) {
 
 // ======================== 資料庫初始化 (一鍵建表與種子資料) ========================
 
-function initDatabase() {
+function initDatabase(forceReset) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheets = CONFIG.SHEETS;
+  const isForce = forceReset === true || forceReset === "true";
 
   // 1. users 表 (新增 hire_date 到職日欄位，涵蓋 8 大部門)
   const userHeaders = ["id", "name", "email", "password_hash", "department_id", "department_name", "manager_id", "role", "hire_date", "created_at"];
@@ -177,7 +178,7 @@ function initDatabase() {
     ["EMP009", "孫管理", "mgmt@company.com", "123456", "DEPT_MGMT", "管理部", "EMP003", "Manager", "2022-04-01", "2026-01-01 09:00:00"],
     ["EMP010", "吳人資", "hr@company.com", "123456", "DEPT_HR", "人資部", "EMP003", "HR", "2023-06-01", "2026-01-01 09:00:00"]
   ];
-  setupSheet(ss, sheets.USERS, userHeaders, userSeeds);
+  setupSheet(ss, sheets.USERS, userHeaders, userSeeds, isForce);
 
   // 2. leave_types 表
   const leaveTypeHeaders = ["id", "name", "min_unit", "requires_attachment", "is_paid", "description"];
@@ -190,7 +191,7 @@ function initDatabase() {
     ["BEREAVEMENT", "喪假", 8.0, true, true, "親屬喪葬事宜，以天(8h)為單位，全薪，需附證明"],
     ["MENSTRUAL", "生理假", 4.0, false, false, "女性同仁每月一天生理假，以半天(4h)為單位"]
   ];
-  setupSheet(ss, sheets.LEAVE_TYPES, leaveTypeHeaders, leaveTypeSeeds);
+  setupSheet(ss, sheets.LEAVE_TYPES, leaveTypeHeaders, leaveTypeSeeds, isForce);
 
   // 3. leave_balances 表
   const balanceHeaders = ["id", "user_id", "leave_type_id", "year", "total_hours", "used_hours", "pending_hours"];
@@ -221,7 +222,7 @@ function initDatabase() {
     ["BAL_EMP005_PERSONAL_2026", "EMP005", "PERSONAL", 2026, 112.0, 0.0, 0.0],
     ["BAL_EMP005_SICK_2026", "EMP005", "SICK", 2026, 240.0, 0.0, 0.0]
   ];
-  setupSheet(ss, sheets.LEAVE_BALANCES, balanceHeaders, balanceSeeds);
+  setupSheet(ss, sheets.LEAVE_BALANCES, balanceHeaders, balanceSeeds, isForce);
 
   // 同步法定特休額度
   syncStatutoryAnnualLeaves(ss);
@@ -232,14 +233,14 @@ function initDatabase() {
     ["REQ-20260815-001", "EMP001", "ANNUAL", "2026-08-15 08:30", "2026-08-15 18:00", 8.0, "家庭旅遊", "", "APPROVED", "COMPLETED", "2026-08-10 10:00:00"],
     ["REQ-20260820-002", "EMP001", "SICK", "2026-08-20 08:30", "2026-08-20 12:00", 3.5, "感冒就醫", "https://picsum.photos/400/300", "APPROVED", "COMPLETED", "2026-08-19 18:00:00"]
   ];
-  setupSheet(ss, sheets.LEAVE_REQUESTS, requestHeaders, requestSeeds);
+  setupSheet(ss, sheets.LEAVE_REQUESTS, requestHeaders, requestSeeds, isForce);
 
   // 5. overtime_requests 表
   const otHeaders = ["id", "user_id", "date", "start_time", "end_time", "hours", "comp_rate", "comp_hours", "reason", "status", "expiry_date", "applied_at"];
   const otSeeds = [
     ["OT-20260810-001", "EMP001", "2026-08-10", "18:30", "21:30", 3.0, 1.34, 4.0, "Q3 專案上線緊急支援", "APPROVED", "2027-08-10", "2026-08-10 21:30:00"]
   ];
-  setupSheet(ss, sheets.OVERTIME_REQUESTS, otHeaders, otSeeds);
+  setupSheet(ss, sheets.OVERTIME_REQUESTS, otHeaders, otSeeds, isForce);
 
   // 6. approval_logs 表
   const logHeaders = ["id", "request_id", "request_type", "approver_id", "approver_role", "status", "comment", "acted_at"];
@@ -247,23 +248,27 @@ function initDatabase() {
     ["LOG-001", "REQ-20260815-001", "LEAVE", "EMP002", "Direct Manager", "APPROVED", "准假，請交接好事項", "2026-08-10 11:30:00"],
     ["LOG-002", "OT-20260810-001", "OVERTIME", "EMP002", "Direct Manager", "APPROVED", "專案表現優良，核准加班補休", "2026-08-11 09:00:00"]
   ];
-  setupSheet(ss, sheets.APPROVAL_LOGS, logHeaders, logSeeds);
+  setupSheet(ss, sheets.APPROVAL_LOGS, logHeaders, logSeeds, isForce);
 
   // 7. holidays 表 (2026 - 2030 國定假日與連假完整種子清單)
   const holidayHeaders = ["date", "name", "is_workday"];
-  setupSheet(ss, sheets.HOLIDAYS, holidayHeaders, get2026To2030HolidaySeeds());
+  setupSheet(ss, sheets.HOLIDAYS, holidayHeaders, get2026To2030HolidaySeeds(), isForce);
 
   return {
     success: true,
-    message: "Google Sheet 資料庫結構與種子資料已成功初始化完畢！"
+    message: isForce ? "Google Sheet 資料庫已強制重置為初始種子資料！" : "Google Sheet 資料庫結構檢查完成（已保留原有資料，未覆蓋）。"
   };
 }
 
-function setupSheet(ss, sheetName, headers, seedData) {
+function setupSheet(ss, sheetName, headers, seedData, forceReset) {
   let sheet = ss.getSheetByName(sheetName);
   if (!sheet) {
     sheet = ss.insertSheet(sheetName);
   } else {
+    // 【防呆保護】：若非強制重置且工作表已存在資料列，則絕對不 clear，保護真實資料！
+    if (!forceReset && sheet.getLastRow() > 1) {
+      return;
+    }
     sheet.clear();
   }
 
