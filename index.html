@@ -80,20 +80,25 @@
           <i class="fa-solid fa-right-to-bracket"></i> 登入系統
         </button>
 
-        <!-- 常用帳號快捷填入 (對齊 Google Sheet 線上資料庫) -->
+        <!-- 快速登入體驗專區 (支援最高管理者直通與各角色快速切換) -->
         <div style="margin-top: 18px; padding-top: 14px; border-top: 1px dashed var(--border-color, #e2e8f0);">
-          <div style="font-size: 0.78rem; font-weight: 600; color: var(--text-muted); margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
-            <i class="fa-solid fa-bolt" style="color: #f59e0b;"></i> 線上資料庫帳號快捷填入 (預設密碼: 123456)
+          <div style="font-size: 0.78rem; font-weight: 600; color: var(--text-muted); margin-bottom: 8px; display: flex; align-items: center; justify-content: space-between;">
+            <span><i class="fa-solid fa-bolt" style="color: #f59e0b;"></i> 快速登入專區</span>
+            <span style="font-size: 0.72rem; color: #10b981;"><i class="fa-solid fa-circle-check"></i> 免手動打字</span>
           </div>
-          <div style="display: flex; flex-wrap: wrap; gap: 6px;">
-            <button type="button" class="btn btn-sm btn-secondary" style="font-size: 0.75rem; padding: 4px 8px;" onclick="App.quickFillLogin('amyliupp@gmail.com', '123456')">
-              <i class="fa-solid fa-user-tie"></i> 人資主管 (劉彩雲)
+
+          <!-- 一鍵直通管理者按鈕 -->
+          <button type="button" class="btn btn-sm btn-primary" style="width: 100%; font-size: 0.85rem; padding: 8px 12px; margin-bottom: 8px; display: flex; align-items: center; justify-content: center; gap: 8px; background: #0f172a; border: 1px solid #334155; color: #f8fafc; cursor: pointer;" onclick="App.directLoginAdmin()">
+            <i class="fa-solid fa-user-shield" style="color: #38bdf8;"></i> <strong>以最高管理者 (李泰叡 / Admin) 一鍵登入</strong>
+          </button>
+
+          <!-- 人資與員工快捷登入按鈕 -->
+          <div style="display: flex; gap: 6px;">
+            <button type="button" class="btn btn-sm btn-secondary" style="flex: 1; font-size: 0.75rem; padding: 6px 8px;" onclick="App.quickLogin('amyliupp@gmail.com', '123456')">
+              <i class="fa-solid fa-user-tie" style="color: #ec4899;"></i> 人資 (劉彩雲)
             </button>
-            <button type="button" class="btn btn-sm btn-secondary" style="font-size: 0.75rem; padding: 4px 8px;" onclick="App.quickFillLogin('tony6070591135@gmail.com', '123456')">
-              <i class="fa-solid fa-user"></i> 研發同仁 (陳勃毅)
-            </button>
-            <button type="button" class="btn btn-sm btn-secondary" style="font-size: 0.75rem; padding: 4px 8px;" onclick="App.quickFillLogin('aray6000@hotmail.com', '123456')">
-              <i class="fa-solid fa-user-shield"></i> 最高管理者 (李泰叡)
+            <button type="button" class="btn btn-sm btn-secondary" style="flex: 1; font-size: 0.75rem; padding: 6px 8px;" onclick="App.quickLogin('tony6070591135@gmail.com', '123456')">
+              <i class="fa-solid fa-user" style="color: #3b82f6;"></i> 研發 (陳勃毅)
             </button>
           </div>
         </div>
@@ -1265,11 +1270,11 @@
   <!-- Toast 訊息提示容器 -->
   <div class="toast-container" id="toastContainer"></div>
 
-  <!-- 系統核心 JS 模組載入 -->
-  <script src="js/config.js"></script>
-  <script src="js/engine.js"></script>
-  <script src="js/mock-data.js"></script>
-  <script src="js/api.js"></script>
-  <script src="js/app.js"></script>
+  <!-- 系統核心 JS 模組載入 (防快取版本) -->
+  <script src="js/config.js?v=20260902_4"></script>
+  <script src="js/engine.js?v=20260902_4"></script>
+  <script src="js/mock-data.js?v=20260902_4"></script>
+  <script src="js/api.js?v=20260902_4"></script>
+  <script src="js/app.js?v=20260902_4"></script>
 </body>
 </html>

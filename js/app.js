@@ -140,6 +140,29 @@ const App = {
   },
 
   /**
+   * 一鍵以最高管理者 (李泰叡 / Admin) 直通登入
+   */
+  async directLoginAdmin() {
+    this.showLoading("最高管理者身分授權中...", "正在載入個人差勤額度與雲端資料庫...");
+    try {
+      localStorage.setItem(SYSTEM_CONFIG.STORAGE_KEYS.SESSION_LOGGED_IN, "true");
+      localStorage.setItem(SYSTEM_CONFIG.STORAGE_KEYS.ACTIVE_USER_ID, "EMP001");
+      const loginOverlay = document.getElementById("loginScreen");
+      if (loginOverlay) loginOverlay.classList.add("hidden");
+
+      await this.loadData("EMP001");
+      this.renderHeader();
+      this.navigate("dashboard");
+      this.showToast(`歡迎回來，${this.state.currentUser ? this.state.currentUser.name : "李泰叡"} (系統最高管理者 Admin)！`, "success");
+    } catch (err) {
+      console.error("管理者直通登入失敗:", err);
+      this.showToast("登入授權失敗：" + err.message, "error");
+    } finally {
+      this.hideLoading();
+    }
+  },
+
+  /**
    * 快速填入登入帳號密碼
    */
   quickFillLogin(email, password) {
