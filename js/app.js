@@ -16,7 +16,8 @@ const App = {
     approvalTab: "leaves",
     calendarYear: 2026,
     calendarMonth: 8, // 0-indexed, 8 代表 9月
-    activeActionItem: null // 當前正在審核或撤銷的單據
+    activeActionItem: null, // 當前正在審核或撤銷的單據
+    isSubmitting: false // 防止連點全域狀態鎖
   },
 
   /**
@@ -258,12 +259,28 @@ const App = {
       });
     }
 
-    // 點擊空白處關閉行動端側邊欄
+    // 全域防止按鈕連點 (Capture 階段精準防呆 Debounce 650ms)
     document.addEventListener("click", (e) => {
-      if (sidebar && sidebar.classList.contains("open") && !sidebar.contains(e.target) && e.target !== menuBtn && !menuBtn.contains(e.target)) {
-        sidebar.classList.remove("open");
+      const btn = e.target.closest("button, .btn, input[type='submit'], .preset-chip, .tab-btn");
+      if (!btn) return;
+
+      // 若目前系統處於資料送出中，直接阻擋任何操作
+      if (this.state && this.state.isSubmitting) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        return false;
       }
-    });
+
+      const now = Date.now();
+      const lastClick = btn.dataset.lastClick ? parseInt(btn.dataset.lastClick, 10) : 0;
+      if (now - lastClick < 650) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        console.warn("【防連點機制】偵測到短時間內重複點擊，已自動安全攔截！");
+        return false;
+      }
+      btn.dataset.lastClick = String(now);
+    }, true);
   },
 
   /**
@@ -712,16 +729,19 @@ const App = {
   },
 
   /**
-   * 送出請假申請
+   * 送出請假申請 (支援按鍵防連點與單號傳遞)
    */
   async handleLeaveSubmit(e) {
-    e.preventDefault();
+    if (e && e.preventDefault) e.preventDefault();
+    if (this.state.isSubmitting) return;
+
     const user = this.state.currentUser;
     const leaveTypeId = document.getElementById("formLeaveType").value;
     const startTime = document.getElementById("formStartTime").value.replace("T", " ");
     const endTime = document.getElementById("formEndTime").value.replace("T", " ");
     const reason = document.getElementById("formReason").value;
     const attachmentUrl = document.getElementById("formAttachment").value;
+    const submitBtn = document.getElementById("btnSubmitLeave");
 
     const payload = {
       userId: user.id,
@@ -732,13 +752,32 @@ const App = {
       attachmentUrl
     };
 
-    const res = await ApiService.applyLeave(payload);
-    if (res.success) {
-      this.showToast(res.message, "success");
-      await this.loadData(user.id);
-      this.navigate("dashboard");
-    } else {
-      this.showToast(res.message, "error");
+    this.state.isSubmitting = true;
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.classList.add("btn-loading");
+      submitBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> 請假申請處理中...`;
+    }
+
+    try {
+      const res = await ApiService.applyLeave(payload);
+      if (res.success) {
+        this.showToast(res.message, "success");
+        await this.loadData(user.id);
+        this.navigate("dashboard");
+      } else {
+        this.showToast(res.message, "error");
+      }
+    } catch (err) {
+      console.error("送出請假申請發生例外:", err);
+      this.showToast("送出請假申請失敗：" + (err.message || "網路異常"), "error");
+    } finally {
+      this.state.isSubmitting = false;
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.classList.remove("btn-loading");
+        submitBtn.innerHTML = `<i class="fa-solid fa-paper-plane"></i> 確認送出請假申請`;
+      }
     }
   },
 
@@ -805,10 +844,12 @@ const App = {
   },
 
   /**
-   * 送出加班申報
+   * 送出加班申報 (支援按鍵防連點)
    */
   async handleOvertimeSubmit(e) {
-    e.preventDefault();
+    if (e && e.preventDefault) e.preventDefault();
+    if (this.state.isSubmitting) return;
+
     const user = this.state.currentUser;
     const date = document.getElementById("otDate").value;
     const startTime = document.getElementById("otStart").value;
@@ -816,6 +857,7 @@ const App = {
     const hours = parseFloat(document.getElementById("otHours").value) || 0;
     const compRate = parseFloat(document.getElementById("otRate").value) || 1.0;
     const reason = document.getElementById("otReason").value;
+    const submitBtn = document.getElementById("btnSubmitOvertime");
 
     const payload = {
       userId: user.id,
@@ -827,14 +869,33 @@ const App = {
       reason
     };
 
-    const res = await ApiService.applyOvertime(payload);
-    if (res.success) {
-      this.showToast(res.message, "success");
-      this.closeModal("overtimeModal");
-      await this.loadData(user.id);
-      this.renderOvertimeView();
-    } else {
-      this.showToast(res.message, "error");
+    this.state.isSubmitting = true;
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.classList.add("btn-loading");
+      submitBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> 加班申報處理中...`;
+    }
+
+    try {
+      const res = await ApiService.applyOvertime(payload);
+      if (res.success) {
+        this.showToast(res.message, "success");
+        this.closeModal("overtimeModal");
+        await this.loadData(user.id);
+        this.renderOvertimeView();
+      } else {
+        this.showToast(res.message, "error");
+      }
+    } catch (err) {
+      console.error("送出加班申報發生例外:", err);
+      this.showToast("送出加班申報失敗：" + (err.message || "網路異常"), "error");
+    } finally {
+      this.state.isSubmitting = false;
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.classList.remove("btn-loading");
+        submitBtn.innerHTML = `<i class="fa-solid fa-paper-plane"></i> 送出加班申報`;
+      }
     }
   },
 
@@ -1064,6 +1125,14 @@ const App = {
         return false;
       });
 
+      // 簽核歷史歷程排序：由最新的排在最上面 (新到舊降序排列)
+      visibleLogs.sort((a, b) => {
+        const timeA = new Date(a.acted_at || a.created_at || 0).getTime();
+        const timeB = new Date(b.acted_at || b.created_at || 0).getTime();
+        if (timeB !== timeA) return timeB - timeA;
+        return String(b.id || "").localeCompare(String(a.id || ""));
+      });
+
       if (visibleLogs.length === 0) {
         tbody.innerHTML = `<tr><td colspan="9" style="text-align: center; color: var(--text-muted); padding: 32px;">目前無符合權限之簽核歷史歷程</td></tr>`;
       } else {
@@ -1079,21 +1148,37 @@ const App = {
           const applicantName = applicant ? `${applicant.name} (${applicant.department_name})` : '--';
 
           const approver = this.state.users.find(u => u.id === log.approver_id) || { name: log.approver_id };
-          const statusBadge = log.status === "APPROVED" 
-            ? `<span class="badge badge-approved">核准 APPROVED</span>` 
-            : `<span class="badge badge-rejected">退回 REJECTED</span>`;
+          let approverRoleText = log.approver_role || "--";
+          if (log.approver_role === "Applicant" || log.status === "PENDING" || log.status === "APPLIED") {
+            approverRoleText = "申請同仁 (本人)";
+          }
+
+          let statusBadge = "";
+          if (log.status === "APPROVED") {
+            statusBadge = `<span class="badge badge-approved">核准 APPROVED</span>`;
+          } else if (log.status === "REJECTED") {
+            statusBadge = `<span class="badge badge-rejected">退回 REJECTED</span>`;
+          } else if (log.status === "PENDING" || log.status === "APPLIED") {
+            statusBadge = `<span class="badge badge-pending">申請送出 PENDING</span>`;
+          } else if (log.status === "CANCEL_PENDING") {
+            statusBadge = `<span class="badge badge-cancel-pending">銷假申請 CANCEL</span>`;
+          } else if (log.status === "CANCELLED") {
+            statusBadge = `<span class="badge badge-cancelled">已撤銷 CANCELLED</span>`;
+          } else {
+            statusBadge = `<span class="badge badge-blue">${log.status}</span>`;
+          }
 
           const tr = document.createElement("tr");
           tr.innerHTML = `
-            <td><span style="font-size: 0.78rem; color: var(--text-sub);">${log.id}</span></td>
-            <td><strong>${log.request_id}</strong></td>
+            <td><span style="font-size: 0.78rem; color: var(--text-sub); font-family: 'JetBrains Mono', monospace;">${log.id}</span></td>
+            <td><strong style="color: var(--primary); font-family: 'JetBrains Mono', monospace;">${log.request_id}</strong></td>
             <td><strong>${applicantName}</strong></td>
             <td><span class="badge badge-blue">${log.request_type}</span></td>
             <td><strong>${approver.name}</strong></td>
-            <td><span style="font-size: 0.8rem; color: var(--text-muted);">${log.approver_role}</span></td>
+            <td><span style="font-size: 0.8rem; color: var(--text-muted);">${approverRoleText}</span></td>
             <td>${statusBadge}</td>
             <td style="font-size: 0.82rem;">${log.comment || '--'}</td>
-            <td style="font-size: 0.78rem; color: var(--text-muted);">${log.acted_at}</td>
+            <td style="font-size: 0.78rem; color: var(--text-muted); font-family: 'JetBrains Mono', monospace;">${log.acted_at}</td>
           `;
           tbody.appendChild(tr);
         });
@@ -1184,9 +1269,10 @@ const App = {
   },
 
   /**
-   * 執行審核動作 (同意 / 退回)
+   * 執行審核動作 (同意 / 退回，支援按鍵防連點)
    */
   async submitApprovalAction(isApprove) {
+    if (this.state.isSubmitting) return;
     if (!this.state.activeActionItem) return;
     const { type, id } = this.state.activeActionItem;
     const comment = document.getElementById("approvalModalComment").value.trim();
@@ -1197,21 +1283,52 @@ const App = {
       return;
     }
 
-    let res = null;
-    if (type === "LEAVE" || type === "CANCEL_LEAVE") {
-      res = await ApiService.reviewLeave({ requestId: id, approverId: user.id, comment }, isApprove);
-    } else if (type === "OVERTIME") {
-      res = await ApiService.reviewOvertime({ overtimeId: id, approverId: user.id, comment }, isApprove);
+    const btnApprove = document.getElementById("btnModalApprove");
+    const btnReject = document.getElementById("btnModalReject");
+    this.state.isSubmitting = true;
+    if (btnApprove) btnApprove.disabled = true;
+    if (btnReject) btnReject.disabled = true;
+
+    const activeBtn = isApprove ? btnApprove : btnReject;
+    const originalHtml = activeBtn ? activeBtn.innerHTML : "";
+    if (activeBtn) {
+      activeBtn.classList.add("btn-loading");
+      activeBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> 審核處理中...`;
     }
 
-    if (res && res.success) {
-      this.showToast(res.message, "success");
-      this.closeModal("approvalModal");
-      await this.loadData(user.id);
-      this.renderApprovalsView();
-      this.updatePendingBadges();
-    } else {
-      this.showToast(res ? res.message : "操作失敗", "error");
+    try {
+      let res = null;
+      if (type === "LEAVE" || type === "CANCEL_LEAVE") {
+        res = await ApiService.reviewLeave({ requestId: id, approverId: user.id, comment }, isApprove);
+      } else if (type === "OVERTIME") {
+        res = await ApiService.reviewOvertime({ overtimeId: id, approverId: user.id, comment }, isApprove);
+      }
+
+      if (res && res.success) {
+        this.showToast(res.message, "success");
+        this.closeModal("approvalModal");
+        await this.loadData(user.id);
+        this.renderApprovalsView();
+        this.updatePendingBadges();
+      } else {
+        this.showToast(res ? res.message : "操作失敗", "error");
+      }
+    } catch (err) {
+      console.error("審核操作發生例外:", err);
+      this.showToast("審核處理失敗：" + (err.message || "網路異常"), "error");
+    } finally {
+      this.state.isSubmitting = false;
+      if (btnApprove) {
+        btnApprove.disabled = false;
+        btnApprove.classList.remove("btn-loading");
+      }
+      if (btnReject) {
+        btnReject.disabled = false;
+        btnReject.classList.remove("btn-loading");
+      }
+      if (activeBtn) {
+        activeBtn.innerHTML = originalHtml;
+      }
     }
   },
 
@@ -1237,6 +1354,7 @@ const App = {
   },
 
   async executeCancelLeave() {
+    if (this.state.isSubmitting) return;
     if (!this.state.activeActionItem) return;
     const { requestId } = this.state.activeActionItem;
     const user = this.state.currentUser;
@@ -1247,19 +1365,39 @@ const App = {
       return;
     }
 
-    const res = await ApiService.cancelLeave({
-      requestId,
-      userId: user.id,
-      cancelReason: reason
-    });
+    const btn = document.getElementById("btnConfirmCancel");
+    this.state.isSubmitting = true;
+    if (btn) {
+      btn.disabled = true;
+      btn.classList.add("btn-loading");
+      btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> 處理中...`;
+    }
 
-    if (res.success) {
-      this.showToast(res.message, "success");
-      this.closeModal("cancelModal");
-      await this.loadData(user.id);
-      this.renderDashboard();
-    } else {
-      this.showToast(res.message, "error");
+    try {
+      const res = await ApiService.cancelLeave({
+        requestId,
+        userId: user.id,
+        cancelReason: reason
+      });
+
+      if (res.success) {
+        this.showToast(res.message, "success");
+        this.closeModal("cancelModal");
+        await this.loadData(user.id);
+        this.renderDashboard();
+      } else {
+        this.showToast(res.message, "error");
+      }
+    } catch (err) {
+      console.error("執行撤銷銷假例外:", err);
+      this.showToast("撤銷銷假失敗：" + (err.message || "網路異常"), "error");
+    } finally {
+      this.state.isSubmitting = false;
+      if (btn) {
+        btn.disabled = false;
+        btn.classList.remove("btn-loading");
+        btn.innerHTML = `確認執行`;
+      }
     }
   },
 
@@ -2004,21 +2142,41 @@ const App = {
   },
 
   async executeDeleteUser() {
+    if (this.state.isSubmitting) return;
     const userId = this.state.activeDeleteUserId;
     if (!userId) return;
 
-    this.showToast(`正在刪除員工 ${userId}...`, "info");
-    const res = await ApiService.callApi("adminDeleteUser", { id: userId });
+    const btn = document.getElementById("btnConfirmDeleteUser");
+    this.state.isSubmitting = true;
+    if (btn) {
+      btn.disabled = true;
+      btn.classList.add("btn-loading");
+      btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> 刪除中...`;
+    }
 
-    if (res.success) {
-      this.showToast(res.message, "success");
-      this.closeModal("deleteUserModal");
-      this.state.activeDeleteUserId = null;
-      await this.loadData();
-      this.renderSettings();
-      this.renderDashboard();
-    } else {
-      this.showToast(res.message, "error");
+    this.showToast(`正在刪除員工 ${userId}...`, "info");
+    try {
+      const res = await ApiService.callApi("adminDeleteUser", { id: userId });
+      if (res.success) {
+        this.showToast(res.message, "success");
+        this.closeModal("deleteUserModal");
+        this.state.activeDeleteUserId = null;
+        await this.loadData();
+        this.renderSettings();
+        this.renderDashboard();
+      } else {
+        this.showToast(res.message, "error");
+      }
+    } catch (err) {
+      console.error("刪除員工例外:", err);
+      this.showToast("刪除員工失敗：" + (err.message || "網路異常"), "error");
+    } finally {
+      this.state.isSubmitting = false;
+      if (btn) {
+        btn.disabled = false;
+        btn.classList.remove("btn-loading");
+        btn.innerHTML = `<i class="fa-solid fa-trash-can"></i> 確認刪除`;
+      }
     }
   },
 
@@ -2086,7 +2244,9 @@ const App = {
   },
 
   async handleAddUserSubmit(event) {
-    event.preventDefault();
+    if (event && event.preventDefault) event.preventDefault();
+    if (this.state.isSubmitting) return;
+
     const name = document.getElementById("newUserName").value.trim();
     const id = document.getElementById("newUserId").value.trim();
     const email = document.getElementById("newUserEmail").value.trim();
@@ -2095,28 +2255,48 @@ const App = {
     const role = document.getElementById("newUserRole").value;
     const hire_date = document.getElementById("newUserHireDate").value;
     const password = document.getElementById("newUserPassword").value.trim() || "123456";
+    const btn = document.getElementById("btnSubmitAddUser");
+
+    this.state.isSubmitting = true;
+    if (btn) {
+      btn.disabled = true;
+      btn.classList.add("btn-loading");
+      btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> 建立中...`;
+    }
 
     this.showToast(`正在建立員工 ${name} 並初始化假別額度...`, "info");
 
-    const res = await ApiService.callApi("adminCreateUser", {
-      id,
-      name,
-      email,
-      department_name,
-      manager_id,
-      role,
-      hire_date,
-      password
-    });
+    try {
+      const res = await ApiService.callApi("adminCreateUser", {
+        id,
+        name,
+        email,
+        department_name,
+        manager_id,
+        role,
+        hire_date,
+        password
+      });
 
-    if (res.success) {
-      this.showToast(res.message, "success");
-      this.closeModal("addUserModal");
-      await this.loadData();
-      this.renderSettings();
-      this.renderDashboard();
-    } else {
-      this.showToast(res.message, "error");
+      if (res.success) {
+        this.showToast(res.message, "success");
+        this.closeModal("addUserModal");
+        await this.loadData();
+        this.renderSettings();
+        this.renderDashboard();
+      } else {
+        this.showToast(res.message, "error");
+      }
+    } catch (err) {
+      console.error("建立員工例外:", err);
+      this.showToast("建立員工失敗：" + (err.message || "網路異常"), "error");
+    } finally {
+      this.state.isSubmitting = false;
+      if (btn) {
+        btn.disabled = false;
+        btn.classList.remove("btn-loading");
+        btn.innerHTML = `<i class="fa-solid fa-check"></i> 確認建立員工與額度`;
+      }
     }
   },
 
@@ -2231,7 +2411,9 @@ const App = {
   },
 
   async handleChangePasswordSubmit(event) {
-    event.preventDefault();
+    if (event && event.preventDefault) event.preventDefault();
+    if (this.state.isSubmitting) return;
+
     const user = this.state.currentUser;
     if (!user) {
       this.showToast("請先登入系統！", "error");
@@ -2242,6 +2424,7 @@ const App = {
     const newPassword = document.getElementById("newPasswordInput").value.trim();
     const confirmPassword = document.getElementById("confirmPasswordInput").value.trim();
     const errEl = document.getElementById("passwordMismatchError");
+    const btn = document.getElementById("btnSubmitChangePassword");
 
     if (newPassword !== confirmPassword) {
       if (errEl) errEl.style.display = "block";
@@ -2254,18 +2437,37 @@ const App = {
       return;
     }
 
-    this.showToast("正在更新個人密碼...", "info");
-    const res = await ApiService.callApi("changePassword", {
-      userId: user.id,
-      oldPassword,
-      newPassword
-    });
+    this.state.isSubmitting = true;
+    if (btn) {
+      btn.disabled = true;
+      btn.classList.add("btn-loading");
+      btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> 儲存中...`;
+    }
 
-    if (res.success) {
-      this.showToast(res.message || "密碼修改成功！", "success");
-      this.closeModal("changePasswordModal");
-    } else {
-      this.showToast(res.message || "密碼修改失敗", "error");
+    this.showToast("正在更新個人密碼...", "info");
+    try {
+      const res = await ApiService.callApi("changePassword", {
+        userId: user.id,
+        oldPassword,
+        newPassword
+      });
+
+      if (res.success) {
+        this.showToast(res.message || "密碼修改成功！", "success");
+        this.closeModal("changePasswordModal");
+      } else {
+        this.showToast(res.message || "密碼修改失敗", "error");
+      }
+    } catch (err) {
+      console.error("修改密碼例外:", err);
+      this.showToast("密碼修改失敗：" + (err.message || "網路異常"), "error");
+    } finally {
+      this.state.isSubmitting = false;
+      if (btn) {
+        btn.disabled = false;
+        btn.classList.remove("btn-loading");
+        btn.innerHTML = `<i class="fa-solid fa-floppy-disk"></i> 儲存新密碼`;
+      }
     }
   },
 
@@ -2422,6 +2624,9 @@ const App = {
     }, 3800);
   }
 };
+
+// 導出至 window 以利主控台除錯與自動化測試
+window.App = App;
 
 // 視窗載入完成後啟動
 window.addEventListener("DOMContentLoaded", () => {

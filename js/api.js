@@ -89,6 +89,11 @@ const ApiService = {
           body: JSON.stringify(payload)
         });
         const result = await response.json();
+        // 若遠端 GAS 回報不支援此 action (如尚未更新部署的 login)，平滑降級至本機模組處理
+        if (result && !result.success && typeof result.message === "string" && result.message.indexOf("Action not supported") !== -1) {
+          console.warn(`遠端 GAS 未支援 ${action}，自動切換至本機模組處理`);
+          return this.callMockApi(action, params);
+        }
         return result;
       } catch (err) {
         console.error("線上 GAS API 呼叫失敗，自動降級使用本機資料庫：", err);
@@ -151,7 +156,7 @@ const ApiService = {
             balances: db.balances,
             requests: db.requests,
             overtimes: db.overtimes,
-            logs: db.logs,
+            logs: (db.logs || []).slice().sort((a, b) => new Date(b.acted_at || 0) - new Date(a.acted_at || 0)),
             holidays: db.holidays,
             config: {
               workStart: SYSTEM_CONFIG.WORK_START,
@@ -271,6 +276,19 @@ const ApiService = {
         };
 
         db.requests.unshift(newReq);
+
+        // 同步將申請單號寫入簽核歷程 (db.logs)
+        db.logs.unshift({
+          id: "LOG-" + Date.now(),
+          request_id: reqId,
+          request_type: "LEAVE",
+          approver_id: userId,
+          approver_role: "Applicant",
+          status: "PENDING",
+          comment: reason || "送出請假申請",
+          acted_at: LeaveEngine.formatDateTime(new Date())
+        });
+
         MockDataEngine.save(db);
 
         return {
@@ -500,6 +518,19 @@ const ApiService = {
         };
 
         db.overtimes.unshift(newOt);
+
+        // 同步將加班申請單號寫入簽核歷程 (db.logs)
+        db.logs.unshift({
+          id: "LOG-" + Date.now(),
+          request_id: otId,
+          request_type: "OVERTIME",
+          approver_id: userId,
+          approver_role: "Applicant",
+          status: "PENDING",
+          comment: reason || "送出加班申報",
+          acted_at: LeaveEngine.formatDateTime(new Date())
+        });
+
         MockDataEngine.save(db);
 
         return {

@@ -84,6 +84,10 @@ function handleRequest(e) {
         };
         break;
 
+      case "login":
+        result = loginUser(params.email, params.password);
+        break;
+
       case "applyLeave":
         result = applyLeave(params);
         break;
@@ -653,6 +657,8 @@ function getBootstrapData(currentUserId) {
   const requests = sheetToObjects(ss.getSheetByName(CONFIG.SHEETS.LEAVE_REQUESTS));
   const overtimes = sheetToObjects(ss.getSheetByName(CONFIG.SHEETS.OVERTIME_REQUESTS));
   const logs = sheetToObjects(ss.getSheetByName(CONFIG.SHEETS.APPROVAL_LOGS));
+  // 簽核歷史歷程：最新時間排在最上面 (新到舊降序排列)
+  logs.sort((a, b) => new Date(b.acted_at || 0) - new Date(a.acted_at || 0));
   const holidays = sheetToObjects(ss.getSheetByName(CONFIG.SHEETS.HOLIDAYS));
 
   let currentUser = null;
@@ -958,24 +964,49 @@ function applyLeave(params) {
   // 鎖定額度: pending_hours += totalHours
   balSheet.getRange(balanceRowIndex, pendingIdx + 1).setValue(pendingHours + totalHours);
 
-  // 6. 產生單號並決定初始審核階層
-  const reqId = "REQ-" + Utilities.formatDate(new Date(), "Asia/Taipei", "yyyyMMdd") + "-" + Math.floor(100 + Math.random() * 900);
+  // 6. 產生單號並決定初始審核階層 (支援接收自訂或自動產生)
+  const reqId = params.requestId || ("REQ-" + Utilities.formatDate(new Date(), "Asia/Taipei", "yyyyMMdd") + "-" + Math.floor(100 + Math.random() * 900));
   const currentStep = "MANAGER"; // 初始階層皆為直屬主管
   const appliedAt = Utilities.formatDate(new Date(), "Asia/Taipei", "yyyy-MM-dd HH:mm:ss");
 
-  reqSheet.appendRow([
-    reqId,
-    userId,
-    leaveTypeId,
-    startTime,
-    endTime,
-    totalHours,
-    reason || "",
-    attachmentUrl || "",
-    "PENDING",
-    currentStep,
-    appliedAt
-  ]);
+  // 動態依標題欄位將申請單號寫入 leave_requests 工作表 (相容 id / 申請單號 / 單號)
+  const reqData = reqSheet.getDataRange().getValues();
+  const reqHeaders = reqData[0] || [];
+  if (reqHeaders.length > 0) {
+    const row = new Array(reqHeaders.length).fill("");
+    reqHeaders.forEach((h, idx) => {
+      const lower = String(h).trim().toLowerCase();
+      if (lower === "id" || h === "申請單號" || h === "單號") row[idx] = reqId;
+      else if (lower === "user_id" || h === "員工編號" || h === "申請人") row[idx] = userId;
+      else if (lower === "leave_type_id" || h === "假別代碼" || h === "假別") row[idx] = leaveTypeId;
+      else if (lower === "start_time" || h === "起始時間") row[idx] = startTime;
+      else if (lower === "end_time" || h === "結束時間") row[idx] = endTime;
+      else if (lower === "total_hours" || h === "請假時數" || h === "工時") row[idx] = totalHours;
+      else if (lower === "reason" || h === "事由" || h === "請假事由") row[idx] = reason || "";
+      else if (lower === "attachment_url" || h === "附件" || h === "證明文件") row[idx] = attachmentUrl || "";
+      else if (lower === "status" || h === "狀態" || h === "審核狀態") row[idx] = "PENDING";
+      else if (lower === "current_step" || h === "審核階層") row[idx] = currentStep;
+      else if (lower === "applied_at" || h === "申請時間") row[idx] = appliedAt;
+    });
+    reqSheet.appendRow(row);
+  } else {
+    reqSheet.appendRow([
+      reqId,
+      userId,
+      leaveTypeId,
+      startTime,
+      endTime,
+      totalHours,
+      reason || "",
+      attachmentUrl || "",
+      "PENDING",
+      currentStep,
+      appliedAt
+    ]);
+  }
+
+  // 同步將申請單號寫入簽核歷史歷程 (approval_logs 表)
+  logApproval(ss, reqId, "LEAVE", userId, "Applicant", "PENDING", reason || "送出請假申請");
 
   return {
     success: true,
@@ -1186,7 +1217,7 @@ function applyOvertime(params) {
   const compHours = Math.round(otHours * rate * 10) / 10;
 
   const otSheet = ss.getSheetByName(CONFIG.SHEETS.OVERTIME_REQUESTS);
-  const otId = "OT-" + Utilities.formatDate(new Date(), "Asia/Taipei", "yyyyMMdd") + "-" + Math.floor(100 + Math.random() * 900);
+  const otId = params.overtimeId || ("OT-" + Utilities.formatDate(new Date(), "Asia/Taipei", "yyyyMMdd") + "-" + Math.floor(100 + Math.random() * 900));
   
   // 補休有效期限預設 1 年
   const expiryDate = new Date(date);
@@ -1194,20 +1225,46 @@ function applyOvertime(params) {
   const expiryStr = Utilities.formatDate(expiryDate, "Asia/Taipei", "yyyy-MM-dd");
   const appliedAt = Utilities.formatDate(new Date(), "Asia/Taipei", "yyyy-MM-dd HH:mm:ss");
 
-  otSheet.appendRow([
-    otId,
-    userId,
-    date,
-    startTime,
-    endTime,
-    otHours,
-    rate,
-    compHours,
-    reason || "",
-    "PENDING",
-    expiryStr,
-    appliedAt
-  ]);
+  // 動態依標題欄位將加班申請單號寫入 overtime_requests 工作表 (相容 id / 申請單號 / 單號)
+  const otData = otSheet.getDataRange().getValues();
+  const otHeaders = otData[0] || [];
+  if (otHeaders.length > 0) {
+    const row = new Array(otHeaders.length).fill("");
+    otHeaders.forEach((h, idx) => {
+      const lower = String(h).trim().toLowerCase();
+      if (lower === "id" || h === "申請單號" || h === "單號") row[idx] = otId;
+      else if (lower === "user_id" || h === "員工編號" || h === "申請人") row[idx] = userId;
+      else if (lower === "date" || h === "加班日期") row[idx] = date;
+      else if (lower === "start_time" || h === "開始時間") row[idx] = startTime;
+      else if (lower === "end_time" || h === "結束時間") row[idx] = endTime;
+      else if (lower === "hours" || h === "加班工時") row[idx] = otHours;
+      else if (lower === "comp_rate" || h === "補休倍率") row[idx] = rate;
+      else if (lower === "comp_hours" || h === "補休時數") row[idx] = compHours;
+      else if (lower === "reason" || h === "加班事由") row[idx] = reason || "";
+      else if (lower === "status" || h === "審核狀態") row[idx] = "PENDING";
+      else if (lower === "expiry_date" || h === "到期日") row[idx] = expiryStr;
+      else if (lower === "applied_at" || h === "申請時間") row[idx] = appliedAt;
+    });
+    otSheet.appendRow(row);
+  } else {
+    otSheet.appendRow([
+      otId,
+      userId,
+      date,
+      startTime,
+      endTime,
+      otHours,
+      rate,
+      compHours,
+      reason || "",
+      "PENDING",
+      expiryStr,
+      appliedAt
+    ]);
+  }
+
+  // 同步將加班申請單號寫入簽核歷史歷程 (approval_logs 表)
+  logApproval(ss, otId, "OVERTIME", userId, "Applicant", "PENDING", reason || "送出加班申報");
 
   return {
     success: true,
@@ -1355,19 +1412,39 @@ function addCompLeaveQuota(ss, userId, year, hours) {
 
 function logApproval(ss, requestId, requestType, approverId, approverRole, status, comment) {
   const logSheet = ss.getSheetByName(CONFIG.SHEETS.APPROVAL_LOGS);
+  if (!logSheet) return;
   const logId = "LOG-" + Utilities.formatDate(new Date(), "Asia/Taipei", "yyyyMMddHHmmss") + "-" + Math.floor(10 + Math.random() * 90);
   const actedAt = Utilities.formatDate(new Date(), "Asia/Taipei", "yyyy-MM-dd HH:mm:ss");
 
-  logSheet.appendRow([
-    logId,
-    requestId,
-    requestType,
-    approverId,
-    approverRole,
-    status,
-    comment,
-    actedAt
-  ]);
+  // 動態依標題欄位將申請單號寫入 approval_logs 工作表 (相容 request_id / 申請單號 / 關聯單號)
+  const logData = logSheet.getDataRange().getValues();
+  const logHeaders = logData[0] || [];
+  if (logHeaders.length > 0) {
+    const row = new Array(logHeaders.length).fill("");
+    logHeaders.forEach((h, idx) => {
+      const lower = String(h).trim().toLowerCase();
+      if (lower === "id" || h === "歷程編號") row[idx] = logId;
+      else if (lower === "request_id" || h === "申請單號" || h === "關聯單號" || h === "單號") row[idx] = requestId;
+      else if (lower === "request_type" || h === "項目類型" || h === "類型") row[idx] = requestType;
+      else if (lower === "approver_id" || h === "簽核人員" || h === "操作人員") row[idx] = approverId;
+      else if (lower === "approver_role" || h === "簽核身分" || h === "身分") row[idx] = approverRole;
+      else if (lower === "status" || h === "簽核決策" || h === "狀態") row[idx] = status;
+      else if (lower === "comment" || h === "簽核意見" || h === "意見") row[idx] = comment || "";
+      else if (lower === "acted_at" || h === "操作時間" || h === "簽核時間") row[idx] = actedAt;
+    });
+    logSheet.appendRow(row);
+  } else {
+    logSheet.appendRow([
+      logId,
+      requestId,
+      requestType,
+      approverId,
+      approverRole,
+      status,
+      comment || "",
+      actedAt
+    ]);
+  }
 }
 
 // ======================== 後台管理功能 ========================
@@ -1607,6 +1684,17 @@ function sheetToObjects(sheet) {
         val = val.substring(0, 10);
       }
       obj[header] = val;
+      // 雙向相容中英文單號與歷程欄位名稱
+      const hTrim = String(header).trim().toLowerCase();
+      if (hTrim === "id" || header === "申請單號" || header === "單號" || header === "歷程編號") {
+        if (!obj.id) obj.id = val;
+        if (!obj["申請單號"]) obj["申請單號"] = val;
+      }
+      if (hTrim === "request_id" || header === "關聯單號" || header === "申請單號") {
+        if (!obj.request_id) obj.request_id = val;
+        if (!obj["關聯單號"]) obj["關聯單號"] = val;
+        if (!obj["申請單號"]) obj["申請單號"] = val;
+      }
     }
     results.push(obj);
   }
