@@ -84,9 +84,24 @@ assert('Code.gs leaveTypeSeeds 設定病假為支半薪與免強制附件', code
 assert('Code.gs 具備 syncLeaveTypes 自動同步遠端 Google Sheet 病假設定', codeGs.indexOf('function syncLeaveTypes') !== -1);
 
 // -------------------------------------------------------------
-// 測試區塊 5: 連線 Google Apps Script 雲端後端即時 API 驗證
+// 測試區塊 5: 單號唯一性防重與歷史除重機制驗證
 // -------------------------------------------------------------
-console.log('\n>>> [測試 5] Google Apps Script 雲端真實後端 API 連線與數據結構檢驗');
+console.log('\n>>> [測試 5] 單號唯一性防重演算法與自動除重 (REQ- / OT-)');
+appJs = fs.readFileSync('js/app.js', 'utf8');
+apiJs = fs.readFileSync('js/api.js', 'utf8');
+codeGs = fs.readFileSync('google-apps-script/Code.gs', 'utf8');
+
+assert('js/app.js handleLeaveSubmit 具備高精度防重單號生成 (REQ-yyyyMMdd-HHmmss-XXXX)', appJs.indexOf('REQ-${dateStr}-${timeStr}-${rand}') !== -1);
+assert('js/app.js handleOvertimeSubmit 具備高精度防重單號生成 (OT-yyyyMMdd-HHmmss-XXXX)', appJs.indexOf('OT-${dateStr}-${timeStr}-${rand}') !== -1);
+assert('js/app.js loadData 具備歷史重複單號自動加後綴保護 (避免介面衝突)', appJs.indexOf('seenReqIds') !== -1 && appJs.indexOf('${r.id}-${seenReqIds[r.id]}') !== -1);
+assert('Code.gs applyLeave 包含資料庫既有單號檢查與防重迴圈 (existingReqIds)', codeGs.indexOf('existingReqIds') !== -1 && codeGs.indexOf('while (existingReqIds[reqId])') !== -1);
+assert('Code.gs applyOvertime 包含資料庫既有單號檢查與防重迴圈 (existingOtIds)', codeGs.indexOf('existingOtIds') !== -1 && codeGs.indexOf('while (existingOtIds[otId])') !== -1);
+assert('Code.gs 具備 syncDeduplicateRequests 自動修復雲端 Google Sheet 重複單號', codeGs.indexOf('function syncDeduplicateRequests') !== -1);
+
+// -------------------------------------------------------------
+// 測試區塊 6: 連線 Google Apps Script 雲端後端即時 API 驗證
+// -------------------------------------------------------------
+console.log('\n>>> [測試 6] Google Apps Script 雲端真實後端 API 連線與數據結構檢驗');
 var postData = JSON.stringify({
   action: 'getBootstrapData',
   params: { currentUserId: 'EMP001' }

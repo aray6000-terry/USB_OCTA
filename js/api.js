@@ -263,8 +263,16 @@ const ApiService = {
         // 鎖定 pending_hours
         bal.pending_hours += totalHours;
 
-        // 建立申請單
-        const reqId = "REQ-" + LeaveEngine.formatDateOnly(new Date()).replace(/-/g, "") + "-" + Math.floor(100 + Math.random() * 900);
+        // 建立申請單 (支援接收自訂或自動產生高精度防重單號)
+        const now = new Date();
+        const dateStr = LeaveEngine.formatDateOnly(now).replace(/-/g, "");
+        const timeStr = [
+          ("0" + now.getHours()).slice(-2),
+          ("0" + now.getMinutes()).slice(-2),
+          ("0" + now.getSeconds()).slice(-2)
+        ].join("");
+        const rand = Math.floor(1000 + Math.random() * 9000);
+        const reqId = params.requestId || `REQ-${dateStr}-${timeStr}-${rand}`;
         const newReq = {
           id: reqId,
           user_id: userId,
@@ -502,7 +510,16 @@ const ApiService = {
         const otHours = parseFloat(hours) || 0;
         const compHours = Math.round(otHours * rate * 10) / 10;
 
-        const otId = "OT-" + LeaveEngine.formatDateOnly(new Date()).replace(/-/g, "") + "-" + Math.floor(100 + Math.random() * 900);
+        // 建立加班申報 (支援接收自訂或自動產生高精度防重單號)
+        const now = new Date();
+        const dateStr = LeaveEngine.formatDateOnly(now).replace(/-/g, "");
+        const timeStr = [
+          ("0" + now.getHours()).slice(-2),
+          ("0" + now.getMinutes()).slice(-2),
+          ("0" + now.getSeconds()).slice(-2)
+        ].join("");
+        const rand = Math.floor(1000 + Math.random() * 9000);
+        const otId = params.overtimeId || `OT-${dateStr}-${timeStr}-${rand}`;
         const expDate = new Date(date);
         expDate.setFullYear(expDate.getFullYear() + 1);
 

@@ -675,6 +675,67 @@ function syncLeaveTypes(ss) {
   }
 }
 
+/**
+ * 自動檢查並修復雲端 Google Sheet 歷史重複單號 (Deduplication & Self-Healing)
+ */
+function syncDeduplicateRequests(ss) {
+  if (!ss) ss = SpreadsheetApp.getActiveSpreadsheet();
+  
+  // 1. 處理請假單 leave_requests
+  const reqSheet = ss.getSheetByName(CONFIG.SHEETS.LEAVE_REQUESTS);
+  if (reqSheet) {
+    const data = reqSheet.getDataRange().getValues();
+    if (data.length > 2) {
+      const headers = data[0];
+      const idIdx = headers.findIndex(h => {
+        const lower = String(h).trim().toLowerCase();
+        return lower === "id" || h === "申請單號" || h === "單號";
+      });
+      if (idIdx !== -1) {
+        const seen = {};
+        for (let i = 1; i < data.length; i++) {
+          const rawId = String(data[i][idIdx] || "").trim();
+          if (!rawId) continue;
+          if (!seen[rawId]) {
+            seen[rawId] = 1;
+          } else {
+            seen[rawId]++;
+            const disambiguatedId = `${rawId}-${seen[rawId]}`;
+            reqSheet.getRange(i + 1, idIdx + 1).setValue(disambiguatedId);
+          }
+        }
+      }
+    }
+  }
+
+  // 2. 處理加班單 overtime_requests
+  const otSheet = ss.getSheetByName(CONFIG.SHEETS.OVERTIME_REQUESTS);
+  if (otSheet) {
+    const data = otSheet.getDataRange().getValues();
+    if (data.length > 2) {
+      const headers = data[0];
+      const idIdx = headers.findIndex(h => {
+        const lower = String(h).trim().toLowerCase();
+        return lower === "id" || h === "申請單號" || h === "單號";
+      });
+      if (idIdx !== -1) {
+        const seen = {};
+        for (let i = 1; i < data.length; i++) {
+          const rawId = String(data[i][idIdx] || "").trim();
+          if (!rawId) continue;
+          if (!seen[rawId]) {
+            seen[rawId] = 1;
+          } else {
+            seen[rawId]++;
+            const disambiguatedId = `${rawId}-${seen[rawId]}`;
+            otSheet.getRange(i + 1, idIdx + 1).setValue(disambiguatedId);
+          }
+        }
+      }
+    }
+  }
+}
+
 // ======================== 資料讀取與 Bootstrap ========================
 
 function getBootstrapData(currentUserId) {
@@ -688,6 +749,9 @@ function getBootstrapData(currentUserId) {
 
   // 自動同步假別最新設定 (病假改為支半薪、免強制檢附證明)
   syncLeaveTypes(ss);
+
+  // 自動防呆除重現存重複單號 (Self-Healing)
+  syncDeduplicateRequests(ss);
 
   const users = sheetToObjects(ss.getSheetByName(CONFIG.SHEETS.USERS));
   const leaveTypes = sheetToObjects(ss.getSheetByName(CONFIG.SHEETS.LEAVE_TYPES));
@@ -1013,8 +1077,33 @@ function applyLeave(params) {
   // 鎖定額度: pending_hours += totalHours
   balSheet.getRange(balanceRowIndex, pendingIdx + 1).setValue(pendingHours + totalHours);
 
-  // 6. 產生單號並決定初始審核階層 (支援接收自訂或自動產生)
-  const reqId = params.requestId || ("REQ-" + Utilities.formatDate(new Date(), "Asia/Taipei", "yyyyMMdd") + "-" + Math.floor(100 + Math.random() * 900));
+  // 6. 產生單號並決定初始審核階層 (採用高精度時戳 + 4位亂數 + 碰撞防重檢核迴圈)
+  const reqData = reqSheet.getDataRange().getValues();
+  const reqHeaders = reqData[0] || [];
+  const existingReqIds = {};
+  if (reqData.length > 1) {
+    const idIdx = reqHeaders.findIndex(h => {
+      const lower = String(h).trim().toLowerCase();
+      return lower === "id" || h === "申請單號" || h === "單號";
+    });
+    if (idIdx !== -1) {
+      for (let i = 1; i < reqData.length; i++) {
+        const val = String(reqData[i][idIdx] || "").trim();
+        if (val) existingReqIds[val] = true;
+      }
+    }
+  }
+
+  let reqId = params.requestId;
+  if (!reqId || existingReqIds[reqId]) {
+    const datePrefix = "REQ-" + Utilities.formatDate(new Date(), "Asia/Taipei", "yyyyMMdd-HHmmss");
+    let counter = 0;
+    do {
+      const rand = Math.floor(1000 + Math.random() * 9000);
+      reqId = `${datePrefix}-${rand}${counter > 0 ? '-' + counter : ''}`;
+      counter++;
+    } while (existingReqIds[reqId]);
+  }
   const currentStep = "MANAGER"; // 初始階層皆為直屬主管
   const appliedAt = Utilities.formatDate(new Date(), "Asia/Taipei", "yyyy-MM-dd HH:mm:ss");
 
@@ -1266,7 +1355,34 @@ function applyOvertime(params) {
   const compHours = Math.round(otHours * rate * 10) / 10;
 
   const otSheet = ss.getSheetByName(CONFIG.SHEETS.OVERTIME_REQUESTS);
-  const otId = params.overtimeId || ("OT-" + Utilities.formatDate(new Date(), "Asia/Taipei", "yyyyMMdd") + "-" + Math.floor(100 + Math.random() * 900));
+  
+  // 產生加班單號 (高精度時戳 + 4位亂數 + 碰撞防重檢核迴圈)
+  const otData = otSheet.getDataRange().getValues();
+  const otHeaders = otData[0] || [];
+  const existingOtIds = {};
+  if (otData.length > 1) {
+    const idIdx = otHeaders.findIndex(h => {
+      const lower = String(h).trim().toLowerCase();
+      return lower === "id" || h === "申請單號" || h === "單號";
+    });
+    if (idIdx !== -1) {
+      for (let i = 1; i < otData.length; i++) {
+        const val = String(otData[i][idIdx] || "").trim();
+        if (val) existingOtIds[val] = true;
+      }
+    }
+  }
+
+  let otId = params.overtimeId;
+  if (!otId || existingOtIds[otId]) {
+    const datePrefix = "OT-" + Utilities.formatDate(new Date(), "Asia/Taipei", "yyyyMMdd-HHmmss");
+    let counter = 0;
+    do {
+      const rand = Math.floor(1000 + Math.random() * 9000);
+      otId = `${datePrefix}-${rand}${counter > 0 ? '-' + counter : ''}`;
+      counter++;
+    } while (existingOtIds[otId]);
+  }
   
   // 補休有效期限預設 1 年
   const expiryDate = new Date(date);

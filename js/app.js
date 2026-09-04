@@ -227,9 +227,29 @@ const App = {
       this.state.currentUser = res.data.currentUser;
       this.state.users = res.data.users;
       this.state.leaveTypes = res.data.leaveTypes;
-      this.state.balances = res.data.balances;
-      this.state.requests = res.data.requests;
-      this.state.overtimes = res.data.overtimes;
+      // 單號防重保護：若歷史資料存有碰撞重複單號，動態加上後綴標示區分 (如 REQ-20260904-939-2)
+      const seenReqIds = {};
+      this.state.requests = (res.data.requests || []).map(r => {
+        if (!r.id) return r;
+        if (!seenReqIds[r.id]) {
+          seenReqIds[r.id] = 1;
+          return r;
+        } else {
+          seenReqIds[r.id]++;
+          return { ...r, id: `${r.id}-${seenReqIds[r.id]}`, _originalId: r.id };
+        }
+      });
+      const seenOtIds = {};
+      this.state.overtimes = (res.data.overtimes || []).map(o => {
+        if (!o.id) return o;
+        if (!seenOtIds[o.id]) {
+          seenOtIds[o.id] = 1;
+          return o;
+        } else {
+          seenOtIds[o.id]++;
+          return { ...o, id: `${o.id}-${seenOtIds[o.id]}`, _originalId: o.id };
+        }
+      });
       this.state.logs = res.data.logs;
       this.state.holidays = res.data.holidays;
       this.state.config = res.data.config;
@@ -751,7 +771,19 @@ const App = {
     }
     const submitBtn = document.getElementById("btnSubmitLeave");
 
+    // 產生高精度防重申請單號 (年月日-時分秒-4位亂數)
+    const now = new Date();
+    const dateStr = LeaveEngine.formatDateOnly(now).replace(/-/g, "");
+    const timeStr = [
+      ("0" + now.getHours()).slice(-2),
+      ("0" + now.getMinutes()).slice(-2),
+      ("0" + now.getSeconds()).slice(-2)
+    ].join("");
+    const rand = Math.floor(1000 + Math.random() * 9000);
+    const requestId = `REQ-${dateStr}-${timeStr}-${rand}`;
+
     const payload = {
+      requestId,
       userId: user.id,
       leaveTypeId,
       startTime,
@@ -867,7 +899,19 @@ const App = {
     const reason = document.getElementById("otReason").value;
     const submitBtn = document.getElementById("btnSubmitOvertime");
 
+    // 產生高精度防重加班單號 (年月日-時分秒-4位亂數)
+    const now = new Date();
+    const dateStr = LeaveEngine.formatDateOnly(now).replace(/-/g, "");
+    const timeStr = [
+      ("0" + now.getHours()).slice(-2),
+      ("0" + now.getMinutes()).slice(-2),
+      ("0" + now.getSeconds()).slice(-2)
+    ].join("");
+    const rand = Math.floor(1000 + Math.random() * 9000);
+    const overtimeId = `OT-${dateStr}-${timeStr}-${rand}`;
+
     const payload = {
+      overtimeId,
       userId: user.id,
       date,
       startTime,
