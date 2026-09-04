@@ -1108,8 +1108,6 @@ function applyLeave(params) {
   const appliedAt = Utilities.formatDate(new Date(), "Asia/Taipei", "yyyy-MM-dd HH:mm:ss");
 
   // 動態依標題欄位將申請單號寫入 leave_requests 工作表 (相容 id / 申請單號 / 單號)
-  const reqData = reqSheet.getDataRange().getValues();
-  const reqHeaders = reqData[0] || [];
   if (reqHeaders.length > 0) {
     const row = new Array(reqHeaders.length).fill("");
     reqHeaders.forEach((h, idx) => {
@@ -1391,8 +1389,6 @@ function applyOvertime(params) {
   const appliedAt = Utilities.formatDate(new Date(), "Asia/Taipei", "yyyy-MM-dd HH:mm:ss");
 
   // 動態依標題欄位將加班申請單號寫入 overtime_requests 工作表 (相容 id / 申請單號 / 單號)
-  const otData = otSheet.getDataRange().getValues();
-  const otHeaders = otData[0] || [];
   if (otHeaders.length > 0) {
     const row = new Array(otHeaders.length).fill("");
     otHeaders.forEach((h, idx) => {
