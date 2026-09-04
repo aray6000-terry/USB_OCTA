@@ -744,7 +744,11 @@ const App = {
     const startTime = document.getElementById("formStartTime").value.replace("T", " ");
     const endTime = document.getElementById("formEndTime").value.replace("T", " ");
     const reason = document.getElementById("formReason").value;
-    const attachmentUrl = document.getElementById("formAttachment").value;
+    let attachmentUrl = document.getElementById("formAttachment").value.trim();
+    // 病假免強制提供證明文件：若為病假且同仁未填附件，主動填入（免附證明）以完全相容各版本雲端資料庫檢核
+    if (leaveTypeId === "SICK" && !attachmentUrl) {
+      attachmentUrl = "（免附證明）";
+    }
     const submitBtn = document.getElementById("btnSubmitLeave");
 
     const payload = {
@@ -1227,14 +1231,19 @@ const App = {
             <strong>事由說明：</strong>
             <p style="color: var(--text-muted); margin-top: 4px; background: #fafafa; padding: 8px 12px; border-radius: 6px;">${req.reason || '無'}</p>
           </div>
-          ${req.attachment_url ? `
+          ${(req.attachment_url && req.attachment_url.indexOf("http") === 0) ? `
             <div>
               <strong>附件證明：</strong>
               <a href="${req.attachment_url}" target="_blank" style="color: var(--primary); text-decoration: underline; margin-left: 8px;">
                 <i class="fa-solid fa-paperclip"></i> 查看證明文件 / 圖片連結
               </a>
             </div>
-          ` : ''}
+          ` : (req.attachment_url ? `
+            <div>
+              <strong>附件證明：</strong>
+              <span style="color: var(--text-muted); font-size: 0.85rem; margin-left: 8px;">${req.attachment_url}</span>
+            </div>
+          ` : '')}
           <div class="form-group">
             <label class="form-label">簽核意見 / 退回原因 <span style="color: var(--danger); font-size: 0.75rem;">(若退回則必填)</span></label>
             <textarea class="form-control" id="approvalModalComment" rows="3" placeholder="請輸入審核意見 (如：准假、同意銷假、或退回之具體理由)..."></textarea>
@@ -1891,9 +1900,10 @@ const App = {
         }
       }
 
-      const attachHtml = item.attachment_url
+      const isLink = item.attachment_url && item.attachment_url.indexOf("http") === 0;
+      const attachHtml = isLink
         ? `<a href="${item.attachment_url}" target="_blank" style="color: var(--primary); font-size: 0.8rem; text-decoration: underline;"><i class="fa-solid fa-paperclip"></i> 檢視附件</a>`
-        : `<span style="color: var(--text-muted); font-size: 0.8rem;">--</span>`;
+        : (item.attachment_url ? `<span style="color: var(--text-muted); font-size: 0.78rem;">${item.attachment_url}</span>` : `<span style="color: var(--text-muted); font-size: 0.8rem;">--</span>`);
 
       const tr = document.createElement("tr");
       tr.innerHTML = `

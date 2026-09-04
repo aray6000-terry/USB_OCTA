@@ -193,9 +193,12 @@ const ApiService = {
       }
 
       case "applyLeave": {
-        const { userId, leaveTypeId, startTime, endTime, reason, attachmentUrl } = params;
+        let { userId, leaveTypeId, startTime, endTime, reason, attachmentUrl } = params;
         if (!userId || !leaveTypeId || !startTime || !endTime) {
           return { success: false, message: "請完整填寫必填欄位。" };
+        }
+        if (leaveTypeId === "SICK" && (!attachmentUrl || !attachmentUrl.trim())) {
+          attachmentUrl = "（免附證明）";
         }
 
         // 1. 工時計算
