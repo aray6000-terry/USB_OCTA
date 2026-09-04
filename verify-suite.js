@@ -99,9 +99,19 @@ assert('Code.gs applyOvertime 包含資料庫既有單號檢查與防重迴圈 (
 assert('Code.gs 具備 syncDeduplicateRequests 自動修復雲端 Google Sheet 重複單號', codeGs.indexOf('function syncDeduplicateRequests') !== -1);
 
 // -------------------------------------------------------------
-// 測試區塊 6: 連線 Google Apps Script 雲端後端即時 API 驗證
+// 測試區塊 6: leave_balances 假別額度在顯示面板上的精確對應
 // -------------------------------------------------------------
-console.log('\n>>> [測試 6] Google Apps Script 雲端真實後端 API 連線與數據結構檢驗');
+console.log('\n>>> [測試 6] leave_balances 額度資料流與顯示面板精確對應驗證');
+assert('js/app.js loadData 正確載入並存入 this.state.balances', appJs.indexOf('this.state.balances = (res.data.balances') !== -1);
+assert('js/app.js loadData 具備中英文欄位映射與型態正規化 (total_hours/used_hours/pending_hours)', appJs.indexOf('total_hours: parseFloat') !== -1 && appJs.indexOf('pending_hours: parseFloat') !== -1);
+assert('js/app.js renderDashboard 假別額度卡片對應 userBalances (String/Number 雙向容錯)', appJs.indexOf('String(b.user_id || "").trim().toUpperCase()') !== -1);
+assert('js/app.js 假別額度卡片真實反映 leave_balances 的總額度與剩餘額度', appJs.indexOf('total === 0 && (typeId === "PERSONAL" || typeId === "SICK")') !== -1);
+assert('Code.gs sheetToObjects 具備 leave_balances 欄位中英文相容 (user_id/total_hours/used_hours/pending_hours)', codeGs.indexOf('hTrim === "user_id" || header === "員工編號"') !== -1 && codeGs.indexOf('hTrim === "total_hours" || header === "總額度"') !== -1);
+
+// -------------------------------------------------------------
+// 測試區塊 7: 連線 Google Apps Script 雲端後端即時 API 驗證
+// -------------------------------------------------------------
+console.log('\n>>> [測試 7] Google Apps Script 雲端真實後端 API 連線與數據結構檢驗');
 var postData = JSON.stringify({
   action: 'getBootstrapData',
   params: { currentUserId: 'EMP001' }

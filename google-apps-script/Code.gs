@@ -1856,6 +1856,25 @@ function sheetToObjects(sheet) {
         if (!obj["關聯單號"]) obj["關聯單號"] = val;
         if (!obj["申請單號"]) obj["申請單號"] = val;
       }
+      // 雙向相容 leave_balances 假別額度欄位名稱
+      if (hTrim === "user_id" || header === "員工編號" || header === "工號" || header === "申請人") {
+        if (!obj.user_id) obj.user_id = val;
+      }
+      if (hTrim === "leave_type_id" || header === "假別代碼" || header === "假別" || header === "請假類別") {
+        if (!obj.leave_type_id) obj.leave_type_id = val;
+      }
+      if (hTrim === "year" || header === "年度" || header === "年份") {
+        if (!obj.year) obj.year = val;
+      }
+      if (hTrim === "total_hours" || header === "總額度" || header === "總時數" || header === "額度" || header === "特休時數") {
+        if (!obj.total_hours) obj.total_hours = val;
+      }
+      if (hTrim === "used_hours" || header === "已使用" || header === "已休時數" || header === "已用時數" || header === "已休") {
+        if (!obj.used_hours) obj.used_hours = val;
+      }
+      if (hTrim === "pending_hours" || header === "審核鎖定" || header === "審核中時數" || header === "鎖定時數" || header === "待審") {
+        if (!obj.pending_hours) obj.pending_hours = val;
+      }
     }
     results.push(obj);
   }

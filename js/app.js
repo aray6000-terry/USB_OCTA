@@ -250,6 +250,19 @@ const App = {
           return { ...o, id: `${o.id}-${seenOtIds[o.id]}`, _originalId: o.id };
         }
       });
+      // 假別額度載入與中英文/類型正規化相容 (leave_balances)
+      this.state.balances = (res.data.balances || []).map(b => {
+        return {
+          ...b,
+          id: b.id || b["額度編號"] || b["編號"] || "",
+          user_id: String(b.user_id || b["員工編號"] || b["工號"] || b["申請人"] || "").trim(),
+          leave_type_id: String(b.leave_type_id || b["假別代碼"] || b["假別"] || b["假別名稱"] || "").trim(),
+          year: parseInt(b.year || b["年度"] || b["年份"] || 0, 10),
+          total_hours: parseFloat(b.total_hours || b["總額度"] || b["總時數"] || b["額度"] || 0) || 0,
+          used_hours: parseFloat(b.used_hours || b["已休時數"] || b["已用時數"] || b["已使用"] || b["已休"] || 0) || 0,
+          pending_hours: parseFloat(b.pending_hours || b["審核中時數"] || b["鎖定時數"] || b["審核鎖定"] || b["待審"] || 0) || 0
+        };
+      });
       this.state.logs = res.data.logs;
       this.state.holidays = res.data.holidays;
       this.state.config = res.data.config;
@@ -458,29 +471,52 @@ const App = {
     const descEl = document.getElementById("statutoryDescText");
 
     if (hireEl) hireEl.textContent = hireDate;
-    if (statDaysEl) statDaysEl.textContent = `${stat.days} 天 (${stat.hours}h)`;
     if (badgeEl) badgeEl.textContent = `年資：${stat.seniorityText || "計算中"}`;
     if (descEl) descEl.textContent = `【${year} 歷年制核算】${stat.description} · 年度未休畢特休將於結算時轉發薪資抵銷。`;
 
-    // 假別額度卡片渲染
-    const userBalances = this.state.balances.filter(b => b.user_id === user.id && b.year === year);
+    // 假別額度卡片渲染 (相容 user_id / 年度型態與中英文假別代碼)
+    const userBalances = this.state.balances.filter(b => 
+      String(b.user_id || "").trim().toUpperCase() === String(user.id || "").trim().toUpperCase() && 
+      parseInt(b.year, 10) === parseInt(year, 10)
+    );
     const balanceGrid = document.getElementById("balanceCardsGrid");
     balanceGrid.innerHTML = "";
+
+    // 同步更新上方橫幅特休法定時數 (若 leave_balances 有實際同步額度則優先對應)
+    const annualBal = userBalances.find(b => {
+      const bType = String(b.leave_type_id || "").trim().toUpperCase();
+      return bType === "ANNUAL" || bType === "特休" || bType === "特休假";
+    });
+    if (statDaysEl) {
+      if (annualBal && annualBal.total_hours > 0) {
+        statDaysEl.textContent = `${(annualBal.total_hours / 8).toFixed(1).replace(/\.0$/, "")} 天 (${annualBal.total_hours}h)`;
+      } else {
+        statDaysEl.textContent = `${stat.days} 天 (${stat.hours}h)`;
+      }
+    }
 
     const priorityTypes = ["ANNUAL", "COMP", "PERSONAL", "SICK"];
     priorityTypes.forEach(typeId => {
       const typeDef = SYSTEM_CONFIG.LEAVE_TYPES.find(t => t.id === typeId) || { name: typeId, color: "#4f46e5" };
-      let bal = userBalances.find(b => b.leave_type_id === typeId);
+      let bal = userBalances.find(b => {
+        const bType = String(b.leave_type_id || "").trim().toUpperCase();
+        return bType === typeId || bType === String(typeDef.name).trim().toUpperCase() ||
+          (typeId === "ANNUAL" && (bType === "特休" || bType === "特休假")) ||
+          (typeId === "COMP" && (bType === "補休" || bType === "補休假")) ||
+          (typeId === "PERSONAL" && (bType === "事假")) ||
+          (typeId === "SICK" && (bType === "病假"));
+      });
       if (!bal) {
         bal = { total_hours: 0, used_hours: 0, pending_hours: 0 };
       }
 
-      const isExempt = (typeId === "PERSONAL" || typeId === "SICK");
-      const total = bal.total_hours;
-      const used = bal.used_hours;
-      const pending = bal.pending_hours;
+      const total = Number(bal.total_hours) || 0;
+      const used = Number(bal.used_hours) || 0;
+      const pending = Number(bal.pending_hours) || 0;
+      // 若 leave_balances 有設定總額度 (例如事假 112h, 病假 240h)，如實對應呈現額度與剩餘；若總額度為 0 則顯示無限制
+      const isExempt = (total === 0 && (typeId === "PERSONAL" || typeId === "SICK"));
       const remaining = isExempt ? "不限" : Math.max(0, total - used - pending);
-      const usedPercent = (!isExempt && total > 0) ? Math.min(100, Math.round(((used + pending) / total) * 100)) : 100;
+      const usedPercent = (!isExempt && total > 0) ? Math.min(100, Math.round(((used + pending) / total) * 100)) : (total === 0 ? 0 : 100);
       const strokeDash = isExempt ? "100, 100" : `${usedPercent}, 100`;
 
       const card = document.createElement("div");
@@ -557,7 +593,10 @@ const App = {
     }
 
     // 渲染補休存摺摘要
-    const compBal = userBalances.find(b => b.leave_type_id === "COMP") || { total_hours: 0, used_hours: 0, pending_hours: 0 };
+    const compBal = userBalances.find(b => {
+      const bType = String(b.leave_type_id || "").trim().toUpperCase();
+      return bType === "COMP" || bType === "補休" || bType === "補休假";
+    }) || { total_hours: 0, used_hours: 0, pending_hours: 0 };
     const compRemaining = Math.max(0, compBal.total_hours - compBal.used_hours - compBal.pending_hours);
     const compSummaryBox = document.getElementById("compWalletSummaryBox");
     compSummaryBox.innerHTML = `
@@ -633,12 +672,20 @@ const App = {
 
     // 計算可用餘額
     const year = new Date(startTime || new Date()).getFullYear();
-    const bal = this.state.balances.find(b => b.user_id === user.id && b.leave_type_id === leaveTypeId && b.year === year);
-    const total = bal ? bal.total_hours : 0;
-    const used = bal ? bal.used_hours : 0;
-    const pending = bal ? bal.pending_hours : 0;
+    const bal = this.state.balances.find(b => 
+      String(b.user_id || "").trim().toUpperCase() === String(user.id || "").trim().toUpperCase() && 
+      (b.leave_type_id === leaveTypeId || (typeDef && b.leave_type_id === typeDef.name) ||
+        (leaveTypeId === "ANNUAL" && (b.leave_type_id === "特休" || b.leave_type_id === "特休假")) ||
+        (leaveTypeId === "COMP" && (b.leave_type_id === "補休" || b.leave_type_id === "補休假")) ||
+        (leaveTypeId === "PERSONAL" && (b.leave_type_id === "事假")) ||
+        (leaveTypeId === "SICK" && (b.leave_type_id === "病假"))) && 
+      parseInt(b.year, 10) === parseInt(year, 10)
+    );
+    const total = bal ? Number(bal.total_hours) || 0 : 0;
+    const used = bal ? Number(bal.used_hours) || 0 : 0;
+    const pending = bal ? Number(bal.pending_hours) || 0 : 0;
     const available = Math.max(0, total - used - pending);
-    const isQuotaExempt = (leaveTypeId === "PERSONAL" || leaveTypeId === "SICK");
+    const isQuotaExempt = (total === 0 && (leaveTypeId === "PERSONAL" || leaveTypeId === "SICK"));
 
     // 試算工時 (08:30-18:00, 午休 12:00-13:30 扣 1.5h, 扣除假日)
     const hours = LeaveEngine.calculateHours(startTime, endTime, this.state.holidays);
@@ -828,7 +875,11 @@ const App = {
     const user = this.state.currentUser;
     const year = SYSTEM_CONFIG.CURRENT_YEAR;
 
-    const compBal = this.state.balances.find(b => b.user_id === user.id && b.leave_type_id === "COMP" && b.year === year) || {
+    const compBal = this.state.balances.find(b => 
+      String(b.user_id || "").trim().toUpperCase() === String(user.id || "").trim().toUpperCase() && 
+      (b.leave_type_id === "COMP" || b.leave_type_id === "補休" || b.leave_type_id === "補休假") && 
+      parseInt(b.year, 10) === parseInt(year, 10)
+    ) || {
       total_hours: 0, used_hours: 0, pending_hours: 0
     };
     const compRemaining = Math.max(0, compBal.total_hours - compBal.used_hours - compBal.pending_hours);
@@ -2096,7 +2147,11 @@ const App = {
     this.state.users.forEach(u => {
       const hireDate = u.hire_date ? LeaveEngine.formatDateOnly(u.hire_date) : "2024-03-01";
       const stat = LeaveEngine.calculateStatutoryAnnualLeave(hireDate, year);
-      const bal = this.state.balances.find(b => b.user_id === u.id && b.leave_type_id === "ANNUAL" && String(b.year) === String(year));
+      const bal = this.state.balances.find(b => 
+        String(b.user_id || "").trim().toUpperCase() === String(u.id || "").trim().toUpperCase() && 
+        (b.leave_type_id === "ANNUAL" || b.leave_type_id === "特休" || b.leave_type_id === "特休假") && 
+        parseInt(b.year, 10) === parseInt(year, 10)
+      );
       const currentBalHours = bal ? bal.total_hours : 0;
       const usedHours = bal ? bal.used_hours : 0;
       const pendingHours = bal ? bal.pending_hours : 0;
