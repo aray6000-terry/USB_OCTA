@@ -68,9 +68,25 @@ sampleLogs.sort(function(a, b) {
 assert('降序排序演算法驗證：首筆必為最新時間 (2026-09-04)', sampleLogs[0].id === 'LOG-2' && sampleLogs[2].id === 'LOG-1');
 
 // -------------------------------------------------------------
-// 測試區塊 4: 連線 Google Apps Script 雲端後端即時 API 驗證
+// 測試區塊 4: 病假薪資與證明附件規則驗證 (改為支半薪、不強制附證明)
 // -------------------------------------------------------------
-console.log('\n>>> [測試 4] Google Apps Script 雲端真實後端 API 連線與數據結構檢驗');
+console.log('\n>>> [測試 4] 病假規則更新 (支半薪、免強制檢附證明)');
+var configJs = fs.readFileSync('js/config.js', 'utf8');
+var apiJs = fs.readFileSync('js/api.js', 'utf8');
+
+assert('js/config.js 定義病假 requiresAttachment 為 false (免強制附件)', configJs.indexOf('id: "SICK"') !== -1 && configJs.indexOf('requiresAttachment: false') !== -1);
+assert('js/config.js 定義病假 isPaid 為 HALF 且 paidText 為 支半薪', configJs.indexOf('isPaid: "HALF"') !== -1 && configJs.indexOf('paidText: "支半薪"') !== -1);
+assert('js/app.js 表單動態檢核設定病假免強制填寫附件 (required = false)', appJs.indexOf('leaveTypeId === "SICK"') !== -1 && appJs.indexOf('attInput.required = false') !== -1);
+assert('js/app.js 卡片與歷史清單正確呈現病假【支半薪】狀態', appJs.indexOf('(typeDef.id === \'SICK\' || typeDef.isPaid === \'HALF\' || typeDef.payRate === 0.5) ? \'支半薪\'') !== -1);
+assert('js/api.js 於前端模擬提交時放行病假無附件申請', apiJs.indexOf('leaveTypeId === "SICK"') !== -1 && apiJs.indexOf('requiresAtt') !== -1);
+assert('Code.gs applyLeave 後端放行病假無附件申請', codeGs.indexOf('leaveTypeId === "SICK"') !== -1 && codeGs.indexOf('requiresAtt') !== -1);
+assert('Code.gs leaveTypeSeeds 設定病假為支半薪與免強制附件', codeGs.indexOf('["SICK", "病假", 0.5, false, "半薪"') !== -1);
+assert('Code.gs 具備 syncLeaveTypes 自動同步遠端 Google Sheet 病假設定', codeGs.indexOf('function syncLeaveTypes') !== -1);
+
+// -------------------------------------------------------------
+// 測試區塊 5: 連線 Google Apps Script 雲端後端即時 API 驗證
+// -------------------------------------------------------------
+console.log('\n>>> [測試 5] Google Apps Script 雲端真實後端 API 連線與數據結構檢驗');
 var postData = JSON.stringify({
   action: 'getBootstrapData',
   params: { currentUserId: 'EMP001' }

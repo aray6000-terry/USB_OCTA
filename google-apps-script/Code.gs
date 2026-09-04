@@ -192,7 +192,7 @@ function initDatabase(forceReset) {
     ["ANNUAL", "特休假", 0.5, false, true, "年度法定特休假，半小時為最小單位，全薪"],
     ["COMP", "補休假", 0.5, false, true, "加班核准後所轉換之補休額度，全薪"],
     ["PERSONAL", "事假", 0.5, false, false, "因個人事務申請，不支薪"],
-    ["SICK", "病假", 0.5, true, false, "因病就醫休養，不支薪，需檢附醫療證明"],
+    ["SICK", "病假", 0.5, false, "半薪", "因病就醫休養，一年內三十日以內半薪，不強制檢附證明"],
     ["MARRIAGE", "婚假", 8.0, true, true, "結婚法定婚假，以天(8h)為單位，全薪，需附結婚證明"],
     ["BEREAVEMENT", "喪假", 8.0, true, true, "親屬喪葬事宜，以天(8h)為單位，全薪，需附證明"],
     ["MENSTRUAL", "生理假", 4.0, false, false, "女性同仁每月一天生理假，以半天(4h)為單位"]
@@ -640,6 +640,41 @@ function get2026To2030HolidaySeeds() {
   ];
 }
 
+/**
+ * 自動同步 leave_types 最新設定 (病假改為支半薪、不強制附件)
+ */
+function syncLeaveTypes(ss) {
+  if (!ss) ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ltSheet = ss.getSheetByName(CONFIG.SHEETS.LEAVE_TYPES);
+  if (!ltSheet) return;
+
+  const data = ltSheet.getDataRange().getValues();
+  if (data.length <= 1) return;
+
+  const headers = data[0];
+  const idIdx = headers.indexOf("id");
+  const reqAttIdx = headers.indexOf("requires_attachment");
+  const isPaidIdx = headers.indexOf("is_paid");
+  const descIdx = headers.indexOf("description");
+
+  if (idIdx === -1) return;
+
+  for (let i = 1; i < data.length; i++) {
+    const row = data[i];
+    if (String(row[idIdx]).trim() === "SICK") {
+      if (reqAttIdx !== -1 && (row[reqAttIdx] === true || String(row[reqAttIdx]).toLowerCase() === "true")) {
+        ltSheet.getRange(i + 1, reqAttIdx + 1).setValue(false);
+      }
+      if (isPaidIdx !== -1 && (row[isPaidIdx] === false || String(row[isPaidIdx]).toLowerCase() === "false")) {
+        ltSheet.getRange(i + 1, isPaidIdx + 1).setValue("半薪");
+      }
+      if (descIdx !== -1 && String(row[descIdx]).indexOf("不支薪") !== -1) {
+        ltSheet.getRange(i + 1, descIdx + 1).setValue("因病就醫休養，一年內三十日以內半薪，不強制檢附證明");
+      }
+    }
+  }
+}
+
 // ======================== 資料讀取與 Bootstrap ========================
 
 function getBootstrapData(currentUserId) {
@@ -651,8 +686,20 @@ function getBootstrapData(currentUserId) {
   // 自動為 Google Sheet 的 holidays 分頁同步補齊 2026-2030 年假日資料
   syncHolidays(ss);
 
+  // 自動同步假別最新設定 (病假改為支半薪、免強制檢附證明)
+  syncLeaveTypes(ss);
+
   const users = sheetToObjects(ss.getSheetByName(CONFIG.SHEETS.USERS));
   const leaveTypes = sheetToObjects(ss.getSheetByName(CONFIG.SHEETS.LEAVE_TYPES));
+  leaveTypes.forEach(t => {
+    if (t.id === "SICK") {
+      t.requires_attachment = false;
+      t.is_paid = "半薪";
+      t.isPaid = "HALF";
+      t.paidText = "支半薪";
+      t.description = "因病就醫休養，一年內三十日以內半薪，不強制檢附證明";
+    }
+  });
   const balances = sheetToObjects(ss.getSheetByName(CONFIG.SHEETS.LEAVE_BALANCES));
   const requests = sheetToObjects(ss.getSheetByName(CONFIG.SHEETS.LEAVE_REQUESTS));
   const overtimes = sheetToObjects(ss.getSheetByName(CONFIG.SHEETS.OVERTIME_REQUESTS));
@@ -885,7 +932,9 @@ function applyLeave(params) {
     return { success: false, message: `此假別最小申請單位為 ${minUnit} 小時。` };
   }
 
-  if (leaveType.requires_attachment && !attachmentUrl) {
+  // 病假依最新規定不強制檢附證明文件 / 圖片連結
+  const requiresAtt = (leaveTypeId === "SICK") ? false : Boolean(leaveType.requires_attachment);
+  if (requiresAtt && !attachmentUrl) {
     return { success: false, message: `申請「${leaveType.name}」必須檢附證明文件。` };
   }
 

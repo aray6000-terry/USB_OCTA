@@ -92,6 +92,30 @@
         App.state.isSubmitting = false;
         log(`9. 全域狀態鎖 isSubmitting 互斥保護機制正常 (${submitBlocked})`);
 
+        // 測試 10: 病假選填附件與表單檢核驗證
+        App.navigate("leave-apply");
+        const leaveSelect = frameDoc.getElementById("formLeaveType");
+        leaveSelect.value = "SICK";
+        App.onFormChange();
+        const attBadge = frameDoc.getElementById("attachmentReqBadge");
+        const attInput = frameDoc.getElementById("formAttachment");
+        const isAttHidden = (!attBadge || attBadge.style.display === "none");
+        const isAttNotReq = (!attInput || attInput.required === false);
+        log(`10. 病假免強制附證明驗證：(此假別必填) 標籤隱藏 [${isAttHidden}]，附件欄位 required 為 false [${isAttNotReq}]`, isAttHidden && isAttNotReq);
+
+        // 測試 11: 首頁病假餘額卡片【支半薪】徽章驗證
+        App.navigate("dashboard");
+        const cards = frameDoc.querySelectorAll(".balance-card");
+        let sickBadgeText = "";
+        cards.forEach(c => {
+          if (c.innerText.includes("病假")) {
+            const b = c.querySelector(".badge");
+            if (b) sickBadgeText = b.innerText.trim();
+          }
+        });
+        const isHalfPaid = (sickBadgeText === "支半薪");
+        log(`11. 病假薪資給付規格驗證：儀表板額度卡片標示為【${sickBadgeText}】 (符合支半薪規格)`, isHalfPaid);
+
         log("🎉 所有前端瀏覽器自動化驗證全數通過！", true);
         document.title = "ALL_TESTS_PASSED";
       } catch (err) {

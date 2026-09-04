@@ -212,7 +212,8 @@ const ApiService = {
         if ((totalHours % minUnit) > 0.01 && (minUnit - (totalHours % minUnit)) > 0.01) {
           return { success: false, message: `此假別最小申請單位為 ${minUnit} 小時。` };
         }
-        if (typeObj.requires_attachment && !attachmentUrl) {
+        const requiresAtt = (leaveTypeId === "SICK") ? false : Boolean(typeObj.requires_attachment);
+        if (requiresAtt && !attachmentUrl) {
           return { success: false, message: `申請「${typeObj.name}」必須檢附證明文件。` };
         }
 

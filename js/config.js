@@ -77,11 +77,13 @@ const SYSTEM_CONFIG = {
       id: "SICK",
       name: "病假",
       minUnit: 0.5,
-      requiresAttachment: true,
-      isPaid: false,
+      requiresAttachment: false,
+      isPaid: "HALF",
+      payRate: 0.5,
+      paidText: "支半薪",
       color: "#e11d48",
       badgeClass: "badge-rose",
-      description: "普通傷病假，不支薪，需檢附看診醫療證明"
+      description: "普通傷病假，一年內未超過三十日部分，工資折半發給 (支半薪)，不強制檢附證明文件"
     },
     {
       id: "MARRIAGE",

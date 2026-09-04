@@ -471,7 +471,7 @@ const App = {
             <span class="type-indicator-pill" style="background-color: ${typeDef.color};"></span>
             ${typeDef.name}
           </span>
-          <span class="badge ${typeDef.badgeClass || 'badge-blue'}">${typeDef.isPaid ? '有薪假' : '不支薪'}</span>
+          <span class="badge ${typeDef.badgeClass || 'badge-blue'}">${(typeDef.id === 'SICK' || typeDef.isPaid === 'HALF' || typeDef.payRate === 0.5) ? '支半薪' : (typeDef.isPaid ? '有薪假' : '不支薪')}</span>
         </div>
         <div class="balance-ring-wrap">
           <div class="balance-nums">
@@ -600,10 +600,14 @@ const App = {
     if (typeDef) {
       document.getElementById("formLeaveTypeDesc").textContent = typeDef.description;
       const attReq = document.getElementById("attachmentReqBadge");
-      if (typeDef.requiresAttachment) {
-        attReq.style.display = "inline";
+      const attInput = document.getElementById("formAttachment");
+      const isReq = (leaveTypeId === "SICK") ? false : Boolean(typeDef.requiresAttachment);
+      if (isReq) {
+        if (attReq) attReq.style.display = "inline";
+        if (attInput) attInput.required = true;
       } else {
-        attReq.style.display = "none";
+        if (attReq) attReq.style.display = "none";
+        if (attInput) attInput.required = false;
       }
     }
 
@@ -1727,7 +1731,7 @@ const App = {
           userName: applicant.name,
           userDept: applicant.department_name,
           isPaid: typeDef.isPaid,
-          isPaidText: typeDef.isPaid ? "有薪假" : "不支薪",
+          isPaidText: (typeDef.id === "SICK" || req.leave_type_id === "SICK" || typeDef.isPaid === "HALF" || typeDef.payRate === 0.5) ? "支半薪" : (typeDef.isPaid ? "有薪假" : "不支薪"),
           startTime: req.start_time,
           endTime: req.end_time,
           hours: Number(req.total_hours) || 0,
@@ -1903,7 +1907,7 @@ const App = {
             ${item.typeName}
           </span>
         </td>
-        <td><span style="font-size: 0.8rem; color: ${item.isPaid ? 'var(--success)' : 'var(--text-muted)'}; font-weight: 600;">${item.isPaidText}</span></td>
+        <td><span style="font-size: 0.8rem; color: ${(item.isPaidText === '支半薪' || item.isPaid === 'HALF' || item.leave_type_id === 'SICK') ? 'var(--warning)' : (item.isPaid ? 'var(--success)' : 'var(--text-muted)')}; font-weight: 600;">${item.isPaidText}</span></td>
         <td style="font-size: 0.82rem; line-height: 1.4;">
           <strong>${item.startTime}</strong><br>
           <span style="color: var(--text-muted);">至 ${item.endTime}</span>
